@@ -73,6 +73,41 @@ describe('a whole field', () => {
   });
 });
 
+describe('a speed or a time that makes no sense', () => {
+  function fresh() {
+    const farm = createFarm({ width: 3, height: 2, seed: 1 });
+    return { farm, player: new Player(farm, farm.run(GARDEN), new FarmScene(3, 2)) };
+  }
+
+  it.each([Number.NaN, -3, 0, Number.POSITIVE_INFINITY])('ignores the speed %s instead of corrupting the count', (speed) => {
+    const { player } = fresh();
+    player.speed = speed;
+    player.advance(1);
+    player.speed = 1;
+    player.advance(1);
+
+    expect(player.error).toBeUndefined();
+    expect(player.ticksGiven).toBe(TICKS_PER_SECOND);
+  });
+
+  it.each([Number.NaN, -1, Number.POSITIVE_INFINITY])('ignores %s seconds of real time', (seconds) => {
+    const { player } = fresh();
+    player.advance(seconds);
+    player.advance(1);
+
+    expect(player.error).toBeUndefined();
+    expect(player.ticksGiven).toBe(TICKS_PER_SECOND);
+  });
+
+  it.each([Number.NaN, 1.5, -1, Number.POSITIVE_INFINITY])('does not hand the engine %s ticks, and does not take it for a script error', (ticks) => {
+    const { player } = fresh();
+    player.advanceTicks(ticks);
+
+    expect(player.error).toBeUndefined();
+    expect(player.ticksGiven).toBe(0);
+  });
+});
+
 describe('the player', () => {
   it('keeps a script error to show it, instead of throwing it inside the animation loop', () => {
     const farm = createFarm({ width: 3, height: 2, seed: 1 });

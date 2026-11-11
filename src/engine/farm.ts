@@ -111,9 +111,9 @@ export function createFarm(config: FarmConfig): Farm {
               clock.charge(paid);
               inFlight.remaining -= paid;
               if (inFlight.remaining > 0) break;
-              const { action, startedAt } = inFlight;
+              const { action, startedAt: actionStartedAt } = inFlight;
               inFlight = undefined;
-              lastResult = action.apply(startedAt);
+              lastResult = action.apply(actionStartedAt);
               guard.observe(action);
             }
           } catch (error) {

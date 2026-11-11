@@ -15,7 +15,9 @@ const width = Number(params.get('w') ?? 3);
 const height = Number(params.get('h') ?? 2);
 const demo = params.get('demo') ?? (width === 3 && height === 2 ? 'garden' : 'sweep');
 const speedParam = params.get('speed') ?? '1';
-const speed: Speed = speedParam === 'instant' ? 'instant' : Number(speedParam);
+const requestedSpeed = Number(speedParam);
+// An address with a speed that makes no sense plays at the normal speed.
+const speed: Speed = speedParam === 'instant' ? 'instant' : Number.isFinite(requestedSpeed) && requestedSpeed > 0 ? requestedSpeed : 1;
 
 const farm = createFarm({ width, height, seed: Number(params.get('seed') ?? 1) });
 const scene = new FarmScene(width, height);

@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import type { FarmEvent, FarmState, GrowthStage, PlantSpecies, Position, Terrain } from '../engine';
+import type { FarmEvent, FarmState, GrowthStage, Item, PlantSpecies, Position, Terrain } from '../engine';
 import { bake, DEFAULT_MODELS } from './models';
 import type { PlantModels } from './models';
 
 /**
- * The farm as a Three.js scene graph. It has no renderer, no canvas and no clock of its own, so it runs
- * (and is tested) anywhere. It only READS what the engine hands out: `sync` brings it to a state, `handle`
+ * The farm as a Three.js scene graph. It has no renderer and no canvas, and its only clock is the one that
+ * paces its animations (`update`), so it runs (and is tested) anywhere. It only READS what the engine hands out: `sync` brings it to a state, `handle`
  * plays the little flourishes that go with the events, and `update` moves time on for the animations.
  * Nothing here decides anything about the farm, and nothing here can change it.
  */
@@ -16,10 +16,11 @@ const DRONE_HEIGHT = 0.75;
 const MAX_PARTICLES = 160;
 
 const TERRAIN_COLORS: Readonly<Record<Terrain, number>> = { grass: 0x4f9a3d, tilled: 0x7a4a26 };
-const ITEM_COLORS: Readonly<Record<string, number>> = { hay: 0xd8e06b, wheat: 0xf2c14e };
+const ITEM_COLORS: Readonly<Record<Item, number>> = { hay: 0xd8e06b, wheat: 0xf2c14e };
 
 interface PlantView {
-  readonly key: string;
+  readonly species: PlantSpecies;
+  readonly stage: GrowthStage;
   readonly mesh: THREE.Mesh;
   /** Seconds since it appeared, while it is still popping into place. */
   age: number | null;
@@ -83,7 +84,7 @@ export class FarmScene {
     );
     const matrix = new THREE.Matrix4();
     for (let index = 0; index < width * height; index++) {
-      const { x, z } = this.worldOf({ x: index % width, y: Math.floor(index / width) });
+      const { x, z } = this.worldOf(this.positionOf(index));
       matrix.makeTranslation(x, -TILE_THICKNESS / 2, z);
       this.tiles.setMatrixAt(index, matrix);
       this.paintTile(index);
@@ -112,10 +113,15 @@ export class FarmScene {
     return cell.y * this.width + cell.x;
   }
 
+  private positionOf(index: number): Position {
+    return { x: index % this.width, y: Math.floor(index / this.width) };
+  }
+
   /** The two shades of a field cell alternate like a chess board, so every cell can be told from its neighbours. */
   private paintTile(index: number): void {
     const color = new THREE.Color(TERRAIN_COLORS[this.terrain[index] ?? 'grass']);
-    const odd = ((index % this.width) + Math.floor(index / this.width)) % 2 === 1;
+    const { x, y } = this.positionOf(index);
+    const odd = (x + y) % 2 === 1;
     this.tiles.setColorAt(index, odd ? color.multiplyScalar(0.86) : color);
     if (this.tiles.instanceColor) this.tiles.instanceColor.needsUpdate = true;
   }
@@ -171,16 +177,16 @@ export class FarmScene {
         if (view) this.removePlant(index, view);
         return;
       }
-      const key = `${cell.plant.species}:${cell.plant.stage}`;
-      if (view?.key === key) return;
+      const { species, stage } = cell.plant;
+      if (view?.species === species && view.stage === stage) return;
       const popping = this.justPlanted.has(index) && !view;
       if (view) this.removePlant(index, view);
-      const mesh = new THREE.Mesh(this.plantGeometry(cell.plant.species, cell.plant.stage), this.plantMaterial);
-      const { x, z } = this.worldOf({ x: index % this.width, y: Math.floor(index / this.width) });
+      const mesh = new THREE.Mesh(this.plantGeometry(species, stage), this.plantMaterial);
+      const { x, z } = this.worldOf(this.positionOf(index));
       mesh.position.set(x, 0, z);
       if (popping) mesh.scale.setScalar(0.01);
       this.root.add(mesh);
-      this.plantViews.set(index, { key, mesh, age: popping ? 0 : null });
+      this.plantViews.set(index, { species, stage, mesh, age: popping ? 0 : null });
     });
     this.justPlanted.clear();
 
@@ -205,7 +211,7 @@ export class FarmScene {
           this.justPlanted.add(this.indexOf(event.at));
           break;
         case 'harvested':
-          this.burst(event.at, ITEM_COLORS[event.item] ?? 0xffffff, 8);
+          this.burst(event.at, ITEM_COLORS[event.item], 8);
           break;
         case 'destroyed':
           this.burst(event.at, 0x8a8a8a, 6);
@@ -216,8 +222,6 @@ export class FarmScene {
         case 'bumped':
         case 'rejected':
           this.shake = 0.35;
-          break;
-        default:
           break;
       }
     }
@@ -286,10 +290,8 @@ export class FarmScene {
   /** What the scene shows right now, in plain values. */
   snapshot(): SceneSnapshot {
     const plants = Array.from({ length: this.width * this.height }, (_, index) => {
-      const key = this.plantViews.get(index)?.key;
-      if (!key) return null;
-      const [species, stage] = key.split(':') as [PlantSpecies, GrowthStage];
-      return { species, stage };
+      const view = this.plantViews.get(index);
+      return view ? { species: view.species, stage: view.stage } : null;
     });
     return { terrain: [...this.terrain], plants, drone: this.droneTarget };
   }
@@ -316,10 +318,20 @@ export class FarmScene {
     return this.plantGeometry(species, stage);
   }
 
+  /** Lets go of everything the scene made on the graphics card. Safe to call more than once. */
   dispose(): void {
-    this.tiles.geometry.dispose();
+    this.root.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      (object.geometry as THREE.BufferGeometry).dispose();
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) material.dispose();
+    });
     for (const geometry of this.plantGeometries.values()) geometry.dispose();
+    this.plantGeometries.clear();
     this.plantMaterial.dispose();
     this.particleGeometry.dispose();
+    for (const material of this.particleMaterials.values()) material.dispose();
+    this.root.clear();
+    this.plantViews.clear();
+    this.particles.length = 0;
   }
 }

@@ -42,6 +42,8 @@ export class Player {
       this.advanceTicks(INSTANT_TICKS_PER_FRAME);
       return;
     }
+    // Time or speed that make no sense (NaN, negative, infinite) must not corrupt the count for good.
+    if (!Number.isFinite(seconds) || seconds <= 0 || !Number.isFinite(this.speed) || this.speed <= 0) return;
     this.owed += seconds * TICKS_PER_SECOND * this.speed;
     const whole = Math.floor(this.owed);
     this.owed -= whole;
@@ -50,7 +52,7 @@ export class Player {
 
   /** Asks the engine for exactly `ticks` more whole ticks, then shows what happened. */
   advanceTicks(ticks: number): void {
-    if (ticks <= 0 || this.run.isFinished) return;
+    if (!Number.isInteger(ticks) || ticks <= 0 || this.run.isFinished) return;
     this.given += ticks;
     try {
       this.run.step(ticks);

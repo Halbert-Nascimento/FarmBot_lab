@@ -238,6 +238,25 @@ describe('the events', () => {
   });
 });
 
+describe('putting the scene away', () => {
+  it('lets go of every geometry and material it made, and can be done twice', () => {
+    const scene = new FarmScene(3, 2);
+    const freed: string[] = [];
+    scene.root.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      (object.geometry as THREE.BufferGeometry).addEventListener('dispose', () => freed.push('geometry'));
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of materials) material.addEventListener('dispose', () => freed.push('material'));
+    });
+    scene.dispose();
+    scene.dispose();
+
+    expect(freed).toContain('geometry');
+    expect(freed).toContain('material');
+    expect(scene.root.children).toHaveLength(0);
+  });
+});
+
 describe('the drone', () => {
   it('stays easy to see on a big field: it grows with the field and has a ring on the ground under it', () => {
     const small = new FarmScene(3, 2);

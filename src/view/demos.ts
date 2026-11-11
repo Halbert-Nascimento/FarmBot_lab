@@ -10,8 +10,10 @@ for (let x = 0; x < 3; x++) {
   }
 }
 
-// Wait for it to ripen, then harvest it on the way back. Grass gives hay.
-wait(125);
+// Wait for the last one to ripen (the others are ready before it), then harvest on the way back.
+while (!isReady()) {
+  wait(5);
+}
 for (let x = 0; x < 3; x++) {
   harvest();
   if (x < 2) {
@@ -19,7 +21,7 @@ for (let x = 0; x < 3; x++) {
   }
 }
 
-// Wheat grows only on tilled soil and costs 2 hay.
+// Wheat needs tilled soil and some hay, which the grass gave.
 move(Dir.SOUTH);
 till();
 plant(Plant.WHEAT);
