@@ -13,6 +13,7 @@ import type {
   Statement,
   UpdateExpression,
 } from 'acorn';
+import { ASSIGNMENT_COST, CALL_COST, OPERATION_COST } from './costs';
 import type { Limits } from './limits';
 import { BINARY, UNARY } from './operators';
 import { Scope } from './scope';
@@ -20,6 +21,8 @@ import type { Binding } from './scope';
 import { ScriptError } from './script-error';
 import {
   createObject,
+  ensureTextFits,
+  exceedsMemory,
   exportValue,
   importValue,
   LIST_METHODS,
@@ -77,10 +80,8 @@ interface Target {
   set(value: unknown): void;
 }
 
-/** What the script's own work costs, in deciticks: a tenth of a tick per operation or assignment, half a tick per call. */
-const OPERATION_COST = 1;
-const ASSIGNMENT_COST = 1;
-const CALL_COST = 5;
+/** How many loop rounds, calls and commands pass between two looks at how much memory the script holds. */
+const MEMORY_CHECK_INTERVAL = 1000;
 
 const GLOBALS: Readonly<Record<string, unknown>> = {
   undefined: undefined,
@@ -103,18 +104,35 @@ export function* interpret(
   const hoisted = new WeakSet<Node>();
   let depth = 0;
   /** Time the script has spent calculating that the farm has not been charged for yet. */
-  let pending = 0;
+  let pendingDeciticks = 0;
+  let untilMemoryCheck = MEMORY_CHECK_INTERVAL;
+  const globalScope = new Scope();
+  /** The scopes the script is running in right now, innermost last: what it can still reach. */
+  const activeScopes: Scope[] = [globalScope];
 
   function charge(deciticks: number): void {
-    pending += deciticks;
+    pendingDeciticks += deciticks;
   }
 
-  /** Hands the pending time to the farm, so the world moves on before whatever comes next. */
-  function* settle(node: Node, always = false): Coroutine<void> {
-    if (pending === 0 && !always) return;
-    const deciticks = pending;
-    pending = 0;
+  function checkMemory(node: Node): void {
+    if (--untilMemoryCheck > 0) return;
+    untilMemoryCheck = MEMORY_CHECK_INTERVAL;
+    if (exceedsMemory(activeScopes, limits.memoryUnits)) {
+      throw new ScriptError('The script is using too much memory', lineOf(node));
+    }
+  }
+
+  /** Hands the time spent calculating to the farm, even if it is none, so the world can move on. */
+  function* yieldComputation(node: Node): Coroutine<void> {
+    checkMemory(node);
+    const deciticks = pendingDeciticks;
+    pendingDeciticks = 0;
     yield { deciticks, apply: () => undefined, line: lineOf(node), computation: true };
+  }
+
+  /** Hands over the time spent calculating, if there is any, before something that must see the world move on. */
+  function* settle(node: Node): Coroutine<void> {
+    if (pendingDeciticks > 0) yield* yieldComputation(node);
   }
 
   function unsupported(node: Node, what: string = node.type): never {
@@ -162,8 +180,7 @@ export function* interpret(
         ? stringify(value, lineOf(node), limits.collectionSize)
         : value;
     const result = operate(node, () => operation(asOperand(left), asOperand(right)));
-    if (typeof result === 'string' && result.length > limits.collectionSize) throw tooBig('text', lineOf(node));
-    return result;
+    return typeof result === 'string' ? ensureTextFits(result, limits.collectionSize, lineOf(node)) : result;
   }
 
   function requireFunction(value: unknown, label: string, node: Node): UserFunction {
@@ -184,6 +201,10 @@ export function* interpret(
       case 'FunctionExpression':
         return makeFunction(node, scope);
       case 'Literal':
+        // Only text, numbers, booleans and null. A big integer would escape the cost of its arithmetic
+        // and a regular expression is an object of the host JavaScript.
+        if (node.regex) return unsupported(node, 'regular expression');
+        if (typeof node.value === 'bigint') return unsupported(node, 'bigint');
         return node.value;
       case 'TemplateLiteral': {
         let text = '';
@@ -192,8 +213,7 @@ export function* interpret(
           const expression = node.expressions[index];
           if (expression) text += stringify(yield* evaluate(expression, scope), lineOf(node), limits.collectionSize);
         }
-        if (text.length > limits.collectionSize) throw tooBig('text', lineOf(node));
-        return text;
+        return ensureTextFits(text, limits.collectionSize, lineOf(node));
       }
       case 'ArrayExpression': {
         if (node.elements.length > limits.collectionSize) throw tooBig('list', lineOf(node));
@@ -300,7 +320,7 @@ export function* interpret(
 
   function* update(node: UpdateExpression, scope: Scope): Coroutine<unknown> {
     const target = yield* targetOf(node.argument, scope);
-    const before = target.get() as number;
+    const before = operate(node, () => Number(target.get())) as number;
     const after = node.operator === '++' ? before + 1 : before - 1;
     charge(OPERATION_COST + ASSIGNMENT_COST);
     target.set(after);
@@ -311,16 +331,19 @@ export function* interpret(
     if (depth >= limits.callDepth) throw new ScriptError('Maximum call depth exceeded', lineOf(node));
     charge(CALL_COST);
     depth++;
+    const slot = activeScopes.length;
     try {
       yield* settle(node);
       const local = new Scope(fn.scope);
       fn.params.forEach((name, index) => local.declare(name, args[index], false));
+      activeScopes.push(local);
       if (fn.body.type === 'BlockStatement') {
         const completion = yield* executeAll(fn.body.body, local);
         return completion?.type === 'return' ? completion.value : undefined;
       }
       return yield* evaluate(fn.body, local);
     } finally {
+      activeScopes.length = Math.min(activeScopes.length, slot);
       depth--;
     }
   }
@@ -368,10 +391,11 @@ export function* interpret(
     }
 
     if (!command) return unsupported(node);
+    // Commands belong to the farm: they never get to see the interpreter's own objects.
+    const handedOver = args.map((arg) => exportValue(arg, lineOf(node), limits.collectionSize * 10));
     let action: Action;
     try {
-      // Commands belong to the farm: they never get to see the interpreter's own objects.
-      action = command(args.map((arg) => exportValue(arg)));
+      action = command(handedOver);
     } catch (error) {
       throw new ScriptError((error as Error).message, lineOf(node));
     }
@@ -384,7 +408,7 @@ export function* interpret(
    * made no progress and stop a loop that never will.
    */
   function* markRound(node: Node): Coroutine<void> {
-    yield* settle(node, true);
+    yield* yieldComputation(node);
   }
 
   /** Runs one round of a loop. Returns how the loop ends, or `undefined` to go on with the next round. */
@@ -435,26 +459,41 @@ export function* interpret(
           scope.declare(declarator.id.name, value, node.kind === 'const');
         }
         return undefined;
-      case 'BlockStatement':
-        return yield* executeAll(node.body, new Scope(scope));
+      case 'BlockStatement': {
+        const inner = new Scope(scope);
+        const slot = activeScopes.length;
+        activeScopes.push(inner);
+        try {
+          return yield* executeAll(node.body, inner);
+        } finally {
+          activeScopes.length = slot;
+        }
+      }
       case 'IfStatement':
         if (yield* evaluate(node.test, scope)) return yield* execute(node.consequent, scope);
         if (node.alternate) return yield* execute(node.alternate, scope);
         return undefined;
       case 'WhileStatement':
         while (true) {
-          const exit = yield* runRound(node, node.test, node.body, scope);
-          if (exit) return exit.completion;
+          const ending = yield* runRound(node, node.test, node.body, scope);
+          if (ending) return ending.completion;
         }
       case 'ForStatement': {
         let round = new Scope(scope);
-        if (node.init?.type === 'VariableDeclaration') yield* execute(node.init, round);
-        else if (node.init) yield* evaluate(node.init, round);
-        while (true) {
-          const exit = yield* runRound(node, node.test, node.body, round);
-          if (exit) return exit.completion;
-          round = round.clone();
-          if (node.update) yield* evaluate(node.update, round);
+        const slot = activeScopes.length;
+        activeScopes.push(round);
+        try {
+          if (node.init?.type === 'VariableDeclaration') yield* execute(node.init, round);
+          else if (node.init) yield* evaluate(node.init, round);
+          while (true) {
+            const ending = yield* runRound(node, node.test, node.body, round);
+            if (ending) return ending.completion;
+            round = round.clone();
+            activeScopes[slot] = round;
+            if (node.update) yield* evaluate(node.update, round);
+          }
+        } finally {
+          activeScopes.length = slot;
         }
       }
       case 'ReturnStatement':
@@ -472,6 +511,6 @@ export function* interpret(
     }
   }
 
-  yield* executeAll(program.body as Statement[], new Scope());
+  yield* executeAll(program.body as Statement[], globalScope);
   yield* settle(program);
 }

@@ -4,10 +4,21 @@ import { hashString } from './hash';
 import { ITEMS } from './items';
 import { interpret, parseScript } from './interpreter';
 import { resolveLimits } from './limits';
-import { ScriptError } from './script-error';
 import { plantState } from './plants';
+import { createProgressGuard } from './progress';
+import { ScriptError } from './script-error';
 import type { Farm, FarmConfig, FarmState } from './types';
 import { createWorld } from './world';
+
+/**
+ * The machine running out of stack or string space is not the player's fault in a way the
+ * game can explain with a raw error, so it becomes a mistake in the script, at the last line seen.
+ */
+function asScriptError(error: unknown, line: number): unknown {
+  if (!(error instanceof RangeError)) return error;
+  if (/string length/i.test(error.message)) return new ScriptError('The text is too long', line);
+  return new ScriptError('The script went too deep: calls or values nested too far for the machine to follow', line);
+}
 
 export function createFarm(config: FarmConfig): Farm {
   const world = createWorld(config);
@@ -49,8 +60,7 @@ export function createFarm(config: FarmConfig): Farm {
       const startedAt = clock.deciticks;
       let finished = false;
       let lastResult: unknown;
-      let idleRounds = 0;
-      let computeDeciticks = 0;
+      const guard = createProgressGuard(limits);
       return {
         get isFinished() {
           return finished;
@@ -70,26 +80,11 @@ export function createFarm(config: FarmConfig): Farm {
               const startedAt = clock.deciticks;
               clock.charge(next.value.deciticks);
               lastResult = next.value.apply(startedAt);
-              const { deciticks, computation, line } = next.value;
-              // Only a command that spends ticks counts as progress. Calculating and free commands do not.
-              computeDeciticks = computation || deciticks === 0 ? computeDeciticks + deciticks : 0;
-              idleRounds = deciticks === 0 ? idleRounds + 1 : 0;
-              if (computeDeciticks > limits.computeTicksWithoutCommand * DECITICKS_PER_TICK) {
-                throw new ScriptError(
-                  `The script spent more than ${limits.computeTicksWithoutCommand} ticks calculating without giving a command (is there an infinite loop?)`,
-                  line ?? 0,
-                );
-              }
-              if (idleRounds > limits.roundsWithoutTime) {
-                throw new ScriptError(
-                  'The script ran for too long without spending any ticks (is there an infinite loop?)',
-                  line ?? 0,
-                );
-              }
+              guard.observe(next.value);
             }
           } catch (error) {
             finished = true;
-            throw error;
+            throw asScriptError(error, guard.lastLine);
           }
         },
         getMeter() {

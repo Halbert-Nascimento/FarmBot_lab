@@ -23,6 +23,7 @@ describe('default limits', () => {
       roundsWithoutTime: 10_000,
       callDepth: 200,
       collectionSize: 10_000,
+      memoryUnits: 1_000_000,
     });
   });
 });

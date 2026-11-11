@@ -82,6 +82,10 @@ _Avoid_: contador, cronômetro
 O registro de uma mudança de estado da fazenda, emitido pelo motor de simulação e consumido pela visualização.
 _Avoid_: notificação, mensagem
 
+**Limite de segurança**:
+Um teto que impede um script de travar o jogo ou esgotar a máquina: ticks de cálculo sem comando, rodadas sem tempo, profundidade de chamadas, tamanho de listas, objetos e textos, e memória em uso.
+_Avoid_: quota, restrição
+
 **Camada**:
 Cada um dos dez degraus de ensino de JavaScript (1 a 10). Uma camada libera comandos e sintaxe.
 _Avoid_: nível, fase, módulo

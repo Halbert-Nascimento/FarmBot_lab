@@ -11,6 +11,11 @@ export interface Limits {
   readonly callDepth: number;
   /** The most items a list may hold, properties an object may hold, or characters a text may hold. */
   readonly collectionSize: number;
+  /**
+   * How much the script may keep in memory at once: one unit for every list item and object
+   * property it still holds, and one for every character of every text it still holds.
+   */
+  readonly memoryUnits: number;
 }
 
 export const DEFAULT_LIMITS: Limits = {
@@ -18,6 +23,7 @@ export const DEFAULT_LIMITS: Limits = {
   roundsWithoutTime: 10_000,
   callDepth: 200,
   collectionSize: 10_000,
+  memoryUnits: 1_000_000,
 };
 
 /**
@@ -29,5 +35,9 @@ export const MAX_CALL_DEPTH = 400;
 
 export function resolveLimits(limits: Partial<Limits> | undefined): Limits {
   const resolved = { ...DEFAULT_LIMITS, ...limits };
+  // A limit that is not a whole number of at least 1 would switch its protection off without anyone noticing.
+  for (const [name, value] of Object.entries(resolved)) {
+    if (!Number.isInteger(value) || value < 1) throw new RangeError(`The limit ${name} must be a whole number of at least 1`);
+  }
   return { ...resolved, callDepth: Math.min(resolved.callDepth, MAX_CALL_DEPTH) };
 }

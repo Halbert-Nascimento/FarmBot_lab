@@ -1,5 +1,5 @@
 import type { BlockStatement, Expression } from 'acorn';
-import type { Scope } from './scope';
+import { Scope } from './scope';
 import { ScriptError } from './script-error';
 
 /** A function the player wrote. It remembers the scope it was written in. */
@@ -17,8 +17,13 @@ export class UserFunction {
  */
 export type ScriptObject = Record<string, unknown>;
 
+/** How many properties each object has, kept so a write never has to count them all. */
+const propertyCounts = new WeakMap<ScriptObject, number>();
+
 export function createObject(): ScriptObject {
-  return Object.create(null) as ScriptObject;
+  const object = Object.create(null) as ScriptObject;
+  propertyCounts.set(object, 0);
+  return object;
 }
 
 function isScriptObject(value: unknown): value is ScriptObject {
@@ -27,6 +32,9 @@ function isScriptObject(value: unknown): value is ScriptObject {
 
 /** What a function looks like to everything outside the interpreter (a log line, a command argument). */
 export const FUNCTION_AS_TEXT = '[function]';
+
+/** What a value that contains itself looks like where it would repeat forever. */
+const CIRCULAR_AS_TEXT = '[circular]';
 
 /** The names that lead out of the player's values into the host JavaScript. No script may use them. */
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
@@ -42,6 +50,12 @@ export function tooBig(what: 'list' | 'object' | 'text', line: number): ScriptEr
     text: 'The text is too long',
   }[what];
   return new ScriptError(message, line);
+}
+
+/** Returns the text if it fits in `maxLength` characters, and refuses it if it does not. */
+export function ensureTextFits(text: string, maxLength: number, line: number): string {
+  if (text.length > maxLength) throw tooBig('text', line);
+  return text;
 }
 
 /** The position a key stands for in a list or a text, or `undefined` when it is not a whole number from 0. */
@@ -78,7 +92,11 @@ export function writeProperty(target: unknown, key: unknown, value: unknown, lin
   } else if (isScriptObject(target)) {
     const name = String(key);
     checkKey(name, line);
-    if (!Object.hasOwn(target, name) && Object.keys(target).length >= maxSize) throw tooBig('object', line);
+    if (!Object.hasOwn(target, name)) {
+      const count = propertyCounts.get(target) ?? Object.keys(target).length;
+      if (count >= maxSize) throw tooBig('object', line);
+      propertyCounts.set(target, count + 1);
+    }
     target[name] = value;
   } else {
     throw new ScriptError(`Cannot set properties of ${target === null ? 'null' : typeof target}`, line);
@@ -96,49 +114,77 @@ export const LIST_METHODS: Readonly<
   pop: (list) => list.pop(),
 };
 
-/** A value as text, the way a template string shows it. */
+/**
+ * A value as text, the way a template string shows it. The text is refused as soon as it passes
+ * `maxLength`, so a value that holds itself many times over is cut short instead of walked in full.
+ */
 export function stringify(value: unknown, line: number, maxLength: number): string {
   const open = new Set<unknown>();
+  let produced = 0;
+  const grow = (characters: number): void => {
+    produced += characters;
+    if (produced > maxLength) throw tooBig('text', line);
+  };
   const text = (item: unknown): string => {
-    if (typeof item === 'string') return item;
-    if (item instanceof UserFunction) return FUNCTION_AS_TEXT;
+    if (typeof item === 'string') {
+      grow(item.length);
+      return item;
+    }
+    if (item instanceof UserFunction) {
+      grow(FUNCTION_AS_TEXT.length);
+      return FUNCTION_AS_TEXT;
+    }
     if (Array.isArray(item)) {
       if (open.has(item)) return '';
       open.add(item);
-      const joined = item.map((entry) => (entry === null || entry === undefined ? '' : text(entry))).join(',');
+      const parts: string[] = [];
+      for (const [index, entry] of item.entries()) {
+        if (index > 0) grow(1);
+        parts.push(entry === null || entry === undefined ? '' : text(entry));
+      }
       open.delete(item);
-      return joined;
+      return parts.join(',');
     }
-    if (isScriptObject(item)) return '[object Object]';
-    return String(item);
+    if (isScriptObject(item)) {
+      grow('[object Object]'.length);
+      return '[object Object]';
+    }
+    const plain = String(item);
+    grow(plain.length);
+    return plain;
   };
-  const result = text(value);
-  if (result.length > maxLength) throw tooBig('text', line);
-  return result;
+  return text(value);
 }
 
 /**
- * A value as the farm may see it: lists and objects the player made are copied into plain
- * ones and functions become text, so the interpreter's own objects never leave it.
+ * A value as the farm may see it: a small plain tree. Lists and objects the player made are
+ * copied (a value that appears twice becomes two copies, one that contains itself shows
+ * `[circular]` where it would repeat) and functions become text, so the interpreter's own
+ * objects never leave it and what is handed over can always be sent as JSON.
+ * `maxItems` caps the size of the tree, counting every list, object, item and property.
  */
-export function exportValue(value: unknown, copies = new Map<object, unknown>()): unknown {
-  if (value instanceof UserFunction) return FUNCTION_AS_TEXT;
-  if (typeof value !== 'object' || value === null) return value;
-  const known = copies.get(value);
-  if (known) return known;
-  if (Array.isArray(value)) {
-    const list: unknown[] = [];
-    copies.set(value, list);
-    for (const item of value) list.push(exportValue(item, copies));
-    return list;
-  }
-  if (isScriptObject(value)) {
-    const plain: Record<string, unknown> = {};
-    copies.set(value, plain);
-    for (const [name, item] of Object.entries(value)) plain[name] = exportValue(item, copies);
-    return plain;
-  }
-  return value;
+export function exportValue(value: unknown, line: number, maxItems: number): unknown {
+  const path = new Set<object>();
+  let items = 0;
+  const copy = (item: unknown): unknown => {
+    if (item instanceof UserFunction) return FUNCTION_AS_TEXT;
+    if (typeof item !== 'object' || item === null) return item;
+    const isList = Array.isArray(item);
+    if (!isList && !isScriptObject(item)) return item;
+    if (path.has(item)) return CIRCULAR_AS_TEXT;
+    items += 1 + (isList ? item.length : Object.keys(item).length);
+    if (items > maxItems) throw new ScriptError('The value is too big', line);
+    path.add(item);
+    try {
+      if (isList) return item.map((entry: unknown) => copy(entry));
+      const plain: Record<string, unknown> = {};
+      for (const [name, entry] of Object.entries(item)) plain[name] = copy(entry);
+      return plain;
+    } finally {
+      path.delete(item);
+    }
+  };
+  return copy(value);
 }
 
 /**
@@ -149,6 +195,49 @@ export function importValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map((item) => importValue(item));
   if (typeof value !== 'object' || value === null) return value;
   const object = createObject();
-  for (const [name, item] of Object.entries(value)) object[name] = importValue(item);
+  let count = 0;
+  for (const [name, item] of Object.entries(value)) {
+    object[name] = importValue(item);
+    count++;
+  }
+  propertyCounts.set(object, count);
   return object;
+}
+
+/**
+ * Whether what the script holds takes more than `limit` memory units: one for every list
+ * item and object property, and one for every character of a text. Only what can still be
+ * reached counts, starting from the scopes the script is running in, so garbage is free.
+ */
+export function exceedsMemory(roots: readonly Scope[], limit: number): boolean {
+  const seen = new Set<object>();
+  const pending: unknown[] = [...roots];
+  let units = 0;
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value === 'string') {
+      units += value.length;
+    } else if (value instanceof UserFunction) {
+      pending.push(value.scope);
+    } else if (value instanceof Scope) {
+      if (seen.has(value)) continue;
+      seen.add(value);
+      for (const binding of value.bindings()) pending.push(binding.value);
+      const outer = value.enclosing();
+      if (outer) pending.push(outer);
+    } else if (Array.isArray(value)) {
+      if (seen.has(value)) continue;
+      seen.add(value);
+      units += value.length;
+      for (const item of value) pending.push(item);
+    } else if (isScriptObject(value)) {
+      if (seen.has(value)) continue;
+      seen.add(value);
+      const entries = Object.values(value);
+      units += entries.length;
+      for (const item of entries) pending.push(item);
+    }
+    if (units > limit) return true;
+  }
+  return false;
 }
