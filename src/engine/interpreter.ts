@@ -11,6 +11,8 @@ export interface Action {
    * What it returns is the value of the command call in the script.
    */
   apply(startedAt: number): unknown;
+  /** The script line that asked for it, when it is not obvious from the command. */
+  readonly line?: number;
 }
 
 export type Command = (args: readonly unknown[]) => Action;
@@ -61,7 +63,17 @@ class Scope {
   find(name: string): Binding | undefined {
     return this.bindings.get(name) ?? this.parent?.find(name);
   }
+
+  /** A sibling scope with its own copy of the same variables (a fresh scope for each loop round). */
+  clone(): Scope {
+    const copy = new Scope(this.parent);
+    for (const [name, binding] of this.bindings) copy.bindings.set(name, { ...binding });
+    return copy;
+  }
 }
+
+/** How a statement ended, when it did not simply run to its end. */
+type Completion = { readonly type: 'break' } | undefined;
 
 type Binary = (a: unknown, b: unknown) => unknown;
 
@@ -200,31 +212,63 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     return yield action;
   }
 
-  function* executeAll(statements: readonly Statement[], scope: Scope): Run<void> {
-    for (const statement of statements) yield* execute(statement, scope);
+  /**
+   * Marks one round of a loop. It spends no time, but lets the farm count the rounds that
+   * made no progress and stop a loop that never will.
+   */
+  function* markRound(node: Node): Run<void> {
+    yield { deciticks: 0, apply: () => undefined, line: lineOf(node) };
   }
 
-  function* execute(node: Statement, scope: Scope): Run<void> {
+  function* executeAll(statements: readonly Statement[], scope: Scope): Run<Completion> {
+    for (const statement of statements) {
+      const completion = yield* execute(statement, scope);
+      if (completion) return completion;
+    }
+    return undefined;
+  }
+
+  function* execute(node: Statement, scope: Scope): Run<Completion> {
     switch (node.type) {
       case 'ExpressionStatement':
         yield* evaluate(node.expression, scope);
-        return;
+        return undefined;
       case 'VariableDeclaration':
         for (const declarator of node.declarations) {
           if (declarator.id.type !== 'Identifier') return unsupported(declarator.id);
           const value = declarator.init ? yield* evaluate(declarator.init, scope) : undefined;
           scope.declare(declarator.id.name, value, node.kind === 'const');
         }
-        return;
+        return undefined;
       case 'BlockStatement':
-        yield* executeAll(node.body, new Scope(scope));
-        return;
+        return yield* executeAll(node.body, new Scope(scope));
       case 'IfStatement':
-        if (yield* evaluate(node.test, scope)) yield* execute(node.consequent, scope);
-        else if (node.alternate) yield* execute(node.alternate, scope);
-        return;
+        if (yield* evaluate(node.test, scope)) return yield* execute(node.consequent, scope);
+        if (node.alternate) return yield* execute(node.alternate, scope);
+        return undefined;
+      case 'WhileStatement':
+        while (true) {
+          yield* markRound(node);
+          if (!(yield* evaluate(node.test, scope))) return undefined;
+          if ((yield* execute(node.body, scope))?.type === 'break') return undefined;
+        }
+      case 'ForStatement': {
+        let round = new Scope(scope);
+        if (node.init?.type === 'VariableDeclaration') yield* execute(node.init, round);
+        else if (node.init) yield* evaluate(node.init, round);
+        while (true) {
+          yield* markRound(node);
+          if (node.test && !(yield* evaluate(node.test, round))) return undefined;
+          if ((yield* execute(node.body, round))?.type === 'break') return undefined;
+          round = round.clone();
+          if (node.update) yield* evaluate(node.update, round);
+        }
+      }
+      case 'BreakStatement':
+        if (node.label) return unsupported(node);
+        return { type: 'break' };
       case 'EmptyStatement':
-        return;
+        return undefined;
       default:
         return unsupported(node);
     }

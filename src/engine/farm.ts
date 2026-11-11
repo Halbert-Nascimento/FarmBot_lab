@@ -2,10 +2,13 @@ import { DECITICKS_PER_TICK, formatTicks } from './clock';
 import { createEnvironment } from './commands';
 import { hashString } from './hash';
 import { ITEMS } from './items';
-import { interpret, parseScript } from './interpreter';
+import { interpret, parseScript, ScriptError } from './interpreter';
 import { plantState } from './plants';
 import type { Farm, FarmConfig, FarmState } from './types';
 import { createWorld } from './world';
+
+/** Rounds of a loop that may pass without any time being spent before the script is stopped. */
+const MAX_IDLE_ROUNDS = 10_000;
 
 export function createFarm(config: FarmConfig): Farm {
   const world = createWorld(config);
@@ -46,6 +49,7 @@ export function createFarm(config: FarmConfig): Farm {
       const startedAt = clock.deciticks;
       let finished = false;
       let lastResult: unknown;
+      let idleRounds = 0;
       return {
         get isFinished() {
           return finished;
@@ -65,6 +69,13 @@ export function createFarm(config: FarmConfig): Farm {
               const startedAt = clock.deciticks;
               clock.charge(next.value.deciticks);
               lastResult = next.value.apply(startedAt);
+              idleRounds = clock.deciticks === startedAt ? idleRounds + 1 : 0;
+              if (idleRounds > MAX_IDLE_ROUNDS) {
+                throw new ScriptError(
+                  'The script ran for too long without spending any ticks (is there an infinite loop?)',
+                  next.value.line ?? 0,
+                );
+              }
             }
           } catch (error) {
             finished = true;
