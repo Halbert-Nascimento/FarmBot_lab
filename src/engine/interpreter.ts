@@ -43,6 +43,8 @@ export interface Action {
   apply(startedAt: number): unknown;
   /** The script line that asked for it, when it is not obvious from the command. */
   readonly line?: number;
+  /** True for time the script spent calculating, which is not a command and changes nothing in the farm. */
+  readonly computation?: boolean;
 }
 
 export type Command = (args: readonly unknown[]) => Action;
@@ -74,6 +76,11 @@ interface Target {
   set(value: unknown): void;
 }
 
+/** What the script's own work costs, in deciticks: a tenth of a tick per operation or assignment, half a tick per call. */
+const OPERATION_COST = 1;
+const ASSIGNMENT_COST = 1;
+const CALL_COST = 5;
+
 const GLOBALS: Readonly<Record<string, unknown>> = {
   undefined: undefined,
   NaN: Number.NaN,
@@ -94,6 +101,20 @@ export function* interpret(
   /** Function declarations already made available at the start of their block. */
   const hoisted = new WeakSet<Node>();
   let depth = 0;
+  /** Time the script has spent calculating that the farm has not been charged for yet. */
+  let pending = 0;
+
+  function charge(deciticks: number): void {
+    pending += deciticks;
+  }
+
+  /** Hands the pending time to the farm, so the world moves on before whatever comes next. */
+  function* settle(node: Node, always = false): Coroutine<void> {
+    if (pending === 0 && !always) return;
+    const deciticks = pending;
+    pending = 0;
+    yield { deciticks, apply: () => undefined, line: lineOf(node), computation: true };
+  }
 
   function unsupported(node: Node, what: string = node.type): never {
     throw new ScriptError(`Unsupported syntax: ${what}`, lineOf(node));
@@ -118,6 +139,30 @@ export function* interpret(
   ): UserFunction {
     const params = node.params.map((param) => (param.type === 'Identifier' ? param.name : unsupported(param)));
     return new UserFunction(params, node.body, scope);
+  }
+
+  /** Runs an operator, turning anything the host JavaScript would reject into a mistake in the script. */
+  function operate(node: Node, run: () => unknown): unknown {
+    try {
+      return run();
+    } catch (error) {
+      if (error instanceof ScriptError) throw error;
+      throw new ScriptError('Invalid operation', lineOf(node));
+    }
+  }
+
+  /** `left <operator> right`, paid for, with objects turned into text for `+` and texts kept short. */
+  function applyBinary(operator: string, left: unknown, right: unknown, node: Node): unknown {
+    const operation = BINARY[operator];
+    if (!operation) return unsupported(node);
+    charge(OPERATION_COST);
+    const asOperand = (value: unknown): unknown =>
+      operator === '+' && ((typeof value === 'object' && value !== null) || value instanceof UserFunction)
+        ? stringify(value, lineOf(node), limits.collectionSize)
+        : value;
+    const result = operate(node, () => operation(asOperand(left), asOperand(right)));
+    if (typeof result === 'string' && result.length > limits.collectionSize) throw tooBig('text', lineOf(node));
+    return result;
   }
 
   function requireFunction(value: unknown, label: string, node: Node): UserFunction {
@@ -193,14 +238,13 @@ export function* interpret(
         return readProperty(target, yield* keyOf(node, scope), lineOf(node));
       }
       case 'BinaryExpression': {
-        const operation = BINARY[node.operator];
-        if (!operation) return unsupported(node);
         const left = yield* evaluate(node.left as Expression, scope);
         const right = yield* evaluate(node.right, scope);
-        return operation(left, right);
+        return applyBinary(node.operator, left, right, node);
       }
       case 'LogicalExpression': {
         const left = yield* evaluate(node.left, scope);
+        charge(OPERATION_COST);
         if (node.operator === '&&') return left ? yield* evaluate(node.right, scope) : left;
         if (node.operator === '||') return left ? left : yield* evaluate(node.right, scope);
         return unsupported(node);
@@ -208,7 +252,9 @@ export function* interpret(
       case 'UnaryExpression': {
         const operation = UNARY[node.operator];
         if (!operation) return unsupported(node);
-        return operation(yield* evaluate(node.argument, scope));
+        const operand = yield* evaluate(node.argument, scope);
+        charge(OPERATION_COST);
+        return operate(node, () => operation(operand));
       }
       case 'AssignmentExpression':
         return yield* assign(node, scope);
@@ -244,10 +290,9 @@ export function* interpret(
     const right = yield* evaluate(node.right, scope);
     let value = right;
     if (node.operator !== '=') {
-      const operation = BINARY[node.operator.slice(0, -1)];
-      if (!operation) return unsupported(node);
-      value = operation(target.get(), right);
+      value = applyBinary(node.operator.slice(0, -1), target.get(), right, node);
     }
+    charge(ASSIGNMENT_COST);
     target.set(value);
     return value;
   }
@@ -256,14 +301,17 @@ export function* interpret(
     const target = yield* targetOf(node.argument, scope);
     const before = target.get() as number;
     const after = node.operator === '++' ? before + 1 : before - 1;
+    charge(OPERATION_COST + ASSIGNMENT_COST);
     target.set(after);
     return node.prefix ? after : before;
   }
 
   function* invoke(fn: UserFunction, args: readonly unknown[], node: Node): Coroutine<unknown> {
     if (depth >= limits.callDepth) throw new ScriptError('Maximum call depth exceeded', lineOf(node));
+    charge(CALL_COST);
     depth++;
     try {
+      yield* settle(node);
       const local = new Scope(fn.scope);
       fn.params.forEach((name, index) => local.declare(name, args[index], false));
       if (fn.body.type === 'BlockStatement') {
@@ -313,7 +361,10 @@ export function* interpret(
       args.push(yield* evaluate(arg, scope));
     }
     if (userFunction) return yield* invoke(userFunction, args, node);
-    if (listMethod) return listMethod(args);
+    if (listMethod) {
+      charge(CALL_COST);
+      return listMethod(args);
+    }
 
     if (!command) return unsupported(node);
     let action: Action;
@@ -323,6 +374,7 @@ export function* interpret(
     } catch (error) {
       throw new ScriptError((error as Error).message, lineOf(node));
     }
+    yield* settle(node);
     return yield action;
   }
 
@@ -331,7 +383,7 @@ export function* interpret(
    * made no progress and stop a loop that never will.
    */
   function* markRound(node: Node): Coroutine<void> {
-    yield { deciticks: 0, apply: () => undefined, line: lineOf(node) };
+    yield* settle(node, true);
   }
 
   /** Runs one round of a loop. Returns how the loop ends, or `undefined` to go on with the next round. */
@@ -378,6 +430,7 @@ export function* interpret(
         for (const declarator of node.declarations) {
           if (declarator.id.type !== 'Identifier') return unsupported(declarator.id);
           const value = declarator.init ? yield* evaluate(declarator.init, scope) : undefined;
+          if (declarator.init) charge(ASSIGNMENT_COST);
           scope.declare(declarator.id.name, value, node.kind === 'const');
         }
         return undefined;
@@ -419,4 +472,5 @@ export function* interpret(
   }
 
   yield* executeAll(program.body as Statement[], new Scope());
+  yield* settle(program);
 }

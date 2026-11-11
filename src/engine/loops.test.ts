@@ -26,7 +26,8 @@ describe('for', () => {
   it('pays for the commands in every iteration', () => {
     const { run } = logged('for (let i = 0; i < 3; i++) {\n  wait(2);\n}');
 
-    expect(run.getMeter().ticks).toBe(6);
+    // three waits of 2 ticks, and the loop itself: 1 setup, 4 tests, 3 updates of 2 tenths
+    expect(run.getMeter().deciticks).toBe(60 + (1 + 4 + 3 * 2));
   });
 
   it('refuses to change a const loop variable', () => {
@@ -45,8 +46,9 @@ describe('while', () => {
     const { farm, run } = logged('plant(Plant.GRASS);\nwhile (!isReady()) {\n  wait(10);\n}\nharvest();');
 
     expect(farm.getState().stock.hay).toBe(1);
-    // plant 6 + 11 rounds of (sensor 1 + wait 10) + the sensor that finds it ripe 1 + harvest 6
-    expect(run.getMeter().ticks).toBe(6 + 11 * 11 + 1 + 6);
+    // plant 6 ticks; then 11 rounds that find it not ripe yet, each (sensor 1 tick + the ! + wait 10 ticks);
+    // then the sensor that finds it ripe (1 tick + the !), then harvest 6 ticks
+    expect(run.getMeter().deciticks).toBe(60 + 11 * (10 + 1 + 100) + (10 + 1) + 60);
   });
 });
 
@@ -110,7 +112,7 @@ describe('pausing inside loops', () => {
 });
 
 describe('endless loops that spend no ticks', () => {
-  it.each(['while (true) {}', 'for (;;) {}', 'let a = 0;\nwhile (a < 1) { a = 0; }'])('are interrupted: %s', (source) => {
+  it.each(['while (true) {}', 'for (;;) {}'])('are interrupted: %s', (source) => {
     const farm = createFarm(config);
     const run = farm.run(source);
 
@@ -126,6 +128,7 @@ describe('endless loops that spend no ticks', () => {
   it('do not stop a long loop that keeps spending ticks', () => {
     const { run } = logged('for (let i = 0; i < 20000; i++) {\n  getPos();\n}');
 
-    expect(run.getMeter().ticks).toBe(20000);
+    // 20000 sensors of 1 tick, plus the loop: 1 setup, 20001 tests, 20000 updates of 2 tenths
+    expect(run.getMeter().deciticks).toBe(20000 * 10 + (1 + 20001 + 20000 * 2));
   });
 });

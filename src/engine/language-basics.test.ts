@@ -39,7 +39,8 @@ describe('variables', () => {
     const { farm, run } = logged('const direction = Dir.EAST;\nlet n = 3;\nmove(direction);\nwait(n);');
 
     expect(farm.getState().drone).toEqual({ x: 1, y: 0 });
-    expect(run.getMeter().ticks).toBe(11);
+    // move 8 ticks + wait 3 ticks + two declarations at a tenth of a tick each
+    expect(run.getMeter().deciticks).toBe(80 + 30 + 2);
   });
 });
 
@@ -61,7 +62,8 @@ describe('expressions', () => {
   it('does not evaluate the right side of && and || when the left decides', () => {
     const { run } = logged('false && wait(10);\ntrue || wait(10);');
 
-    expect(run.getMeter().deciticks).toBe(0);
+    // only the two && and || themselves are paid for, never the skipped wait(10)
+    expect(run.getMeter().deciticks).toBe(2);
   });
 
   it('negates and flips signs', () => {

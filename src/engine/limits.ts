@@ -1,8 +1,8 @@
 /** What keeps a script from hanging or exhausting the machine. All of them can be set per farm. */
 export interface Limits {
   /**
-   * Ticks a script may spend computing without calling a single command. A command is the
-   * only sign of progress, so a loop that only calculates is stopped here (REQ-FND-15).
+   * Ticks a script may spend computing without calling a command that spends ticks. That is
+   * the only sign of progress, so a loop that only calculates is stopped here (REQ-FND-15).
    */
   readonly computeTicksWithoutCommand: number;
   /** Loop rounds (and free commands) in a row that may pass without any time being spent. */

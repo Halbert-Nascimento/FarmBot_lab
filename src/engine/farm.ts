@@ -50,6 +50,7 @@ export function createFarm(config: FarmConfig): Farm {
       let finished = false;
       let lastResult: unknown;
       let idleRounds = 0;
+      let computeDeciticks = 0;
       return {
         get isFinished() {
           return finished;
@@ -69,11 +70,20 @@ export function createFarm(config: FarmConfig): Farm {
               const startedAt = clock.deciticks;
               clock.charge(next.value.deciticks);
               lastResult = next.value.apply(startedAt);
-              idleRounds = clock.deciticks === startedAt ? idleRounds + 1 : 0;
+              const { deciticks, computation, line } = next.value;
+              // Only a command that spends ticks counts as progress. Calculating and free commands do not.
+              computeDeciticks = computation || deciticks === 0 ? computeDeciticks + deciticks : 0;
+              idleRounds = deciticks === 0 ? idleRounds + 1 : 0;
+              if (computeDeciticks > limits.computeTicksWithoutCommand * DECITICKS_PER_TICK) {
+                throw new ScriptError(
+                  `The script spent more than ${limits.computeTicksWithoutCommand} ticks calculating without giving a command (is there an infinite loop?)`,
+                  line ?? 0,
+                );
+              }
               if (idleRounds > limits.roundsWithoutTime) {
                 throw new ScriptError(
                   'The script ran for too long without spending any ticks (is there an infinite loop?)',
-                  next.value.line ?? 0,
+                  line ?? 0,
                 );
               }
             }

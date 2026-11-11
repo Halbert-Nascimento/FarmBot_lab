@@ -6,7 +6,8 @@ describe('function declarations', () => {
   it('runs the body each time it is called, paying for its commands', () => {
     const { run } = logged('function twice() {\n  wait(1);\n  wait(1);\n}\ntwice();\ntwice();');
 
-    expect(run.getMeter().ticks).toBe(4);
+    // four ticks of waiting and two calls at half a tick each
+    expect(run.getMeter().deciticks).toBe(40 + 2 * 5);
   });
 
   it('can be called before the line that declares it', () => {
@@ -38,7 +39,7 @@ describe('function declarations', () => {
     const { farm, run } = logged(source);
 
     expect(farm.getState().stock.hay).toBe(2);
-    expect(run.getMeter().ticks).toBe(2 * (6 + 120 + 6));
+    expect(run.getMeter().deciticks).toBe(2 * (60 + 1200 + 60) + 2 * 5);
   });
 
   it('can call itself', () => {
