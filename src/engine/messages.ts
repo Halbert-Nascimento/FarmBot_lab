@@ -47,6 +47,9 @@ const ENDS_A_SENTENCE = /[.?!)]$/;
 export function renderError(language: Language, code: ErrorCode, line: number, params: MessageParams): RenderedError {
   const values: Record<string, unknown> = { ...params };
   if (typeof params['whatKey'] === 'string') values['what'] = text(language, `what.${params['whatKey']}`);
+  // A feature of the language and the layer that unlocks it are named by their keys in the translation files.
+  if (typeof params['feature'] === 'string') values['feature'] = text(language, `feature.${params['feature']}`);
+  if (typeof params['layer'] === 'number') values['layerName'] = text(language, `layer.${params['layer']}`);
   const reason = fill(text(language, `error.${code}`), values);
   const hint = fill(text(language, `hint.${code}`), values);
   const candidates = Array.isArray(params['candidates']) ? (params['candidates'] as string[]) : [];

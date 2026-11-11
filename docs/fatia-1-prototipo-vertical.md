@@ -58,6 +58,28 @@ Pontos pequenos que o GDD não fixava e que o motor adotou. Valem até o balance
 - **Adiado de propósito (fora do #6):** os scripts ainda não veem o estágio de crescimento (o GDD prevê `getProgress` na camada 3), e `plant` e `harvest` não devolvem resultado ao script (o GDD prevê `harvest` devolver `{item, qty}` ou `null`). Entram quando a linguagem tiver variáveis e `if`.
 - **Pendente para a visualização (ticket da cena 3D):** o motor ainda não emite evento de mudança de estágio de crescimento. A visualização hoje precisaria ler o estado para saber o estágio.
 
+## Sintaxe por camada (issue #8)
+
+- **Configuração:** `FarmConfig.layer` (inteiro de 1 a 10). Sem ele, todas as camadas ficam liberadas (modo livre, REQ-ENS-41). Valor fora disso faz a criação da fazenda falhar.
+- **Análise prévia da estrutura:** ao chamar `run`, o motor percorre a árvore sintática do script inteiro (nunca o texto) e, se achar algo de uma camada ainda não liberada, recusa o script **todo**, antes de executar qualquer comando. Por isso `for` dentro de um texto, colchetes em texto, comentários e nomes como `format` ou `whileTrue` nunca geram bloqueio. O erro `layerLocked` aponta a linha do primeiro recurso bloqueado (pela posição no script), o recurso e a camada que o libera, com o nome da camada, nos dois idiomas.
+- **O que cada camada libera** (cada uma libera também o das anteriores; a tabela do código é `SYNTAX_LAYERS`, em `src/engine/layers.ts`):
+
+| Camada | Libera |
+| --- | --- |
+| 1. Sequência | chamadas de comando em ordem, com constantes como argumento (`move(Dir.EAST)`) |
+| 2. Valores e terreno | números e textos escritos no código |
+| 3. Variáveis | `let`, `const`, atribuição, `+=`, `++`/`--`, aritmética, template strings |
+| 4. Decisão | `if`/`else`, comparações, `&&`, `||`, `!` |
+| 5. Repetição contada | `for` |
+| 6. Repetição condicional | `while`, `break` |
+| 7. Laços aninhados | um laço dentro de outro, de qualquer tipo |
+| 8. Funções | `function`, parâmetros, `return`, setas, chamada de função própria |
+| 9. Listas | `[...]`, índice, `length`, `push`, `pop` |
+| 10. Objetos e estado | `{...}`, propriedades (`a.b`) |
+
+- **Interpretação:** constantes como `Dir.EAST` valem desde a camada 1; números e textos literais só na 2. Uma chamada a um nome que o próprio script declara conta como chamada de função própria (camada 8); qualquer outro nome é um comando.
+- **Lacuna conhecida, temporária:** o **bloqueio de comandos por camada** (REQ-API-05: por exemplo `till` na camada 2 e `wait` na 3) **ainda não existe**. Hoje, com `layer: 1`, `till()` funciona e `wait(3)` só é recusado por causa do número `3`. Enquanto esse bloqueio não existir, a progressão por camadas **não está completa**. O trabalho está registrado numa issue própria.
+
 ## Bilíngue e mensagens de erro (issue #7)
 
 - **Nomes:** todo comando e toda constante existe em inglês e em português, e os dois valem sempre, qualquer que seja o idioma das mensagens. Um jogador pode escrever comandos em inglês e ler erros em português, ou o contrário. Os nomes em português não têm acento, para ficar fácil digitar. Tabela completa em `src/engine/names.ts` (`COMMAND_NAMES` e `CONSTANT_PAIRS`).

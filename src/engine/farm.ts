@@ -3,6 +3,7 @@ import { createEnvironment } from './commands';
 import { hashString } from './hash';
 import { ITEMS } from './items';
 import { interpret, parseScript } from './interpreter';
+import { checkLayer, LAYER_COUNT } from './layers';
 import { DEFAULT_LANGUAGE, isLanguage } from './messages';
 import type { Language } from './messages';
 import { resolveLimits } from './limits';
@@ -25,8 +26,13 @@ function asScriptError(error: unknown, line: number, language: Language): unknow
 export function createFarm(config: FarmConfig): Farm {
   const language = config.language ?? DEFAULT_LANGUAGE;
   if (!isLanguage(language)) throw new RangeError('The language must be en or pt-BR');
+  const layer = config.layer ?? LAYER_COUNT;
+  if (!Number.isInteger(layer) || layer < 1 || layer > LAYER_COUNT) {
+    throw new RangeError(`The layer must be a whole number from 1 to ${LAYER_COUNT}`);
+  }
   const world = createWorld(config);
   const env = createEnvironment(world);
+  const constantGroups = new Set(Object.keys(env.constants));
   const limits = resolveLimits(config.limits);
   const { clock } = world;
 
@@ -63,6 +69,7 @@ export function createFarm(config: FarmConfig): Farm {
       let program;
       try {
         program = parseScript(source);
+        checkLayer(program, layer, constantGroups);
       } catch (error) {
         throw asScriptError(error, 0, language);
       }

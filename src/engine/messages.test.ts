@@ -7,9 +7,9 @@ import { config } from './test-utils';
 
 const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort();
 
-function fail(source: string, language: 'en' | 'pt-BR', limits: Partial<Limits> = {}) {
+function fail(source: string, language: 'en' | 'pt-BR', limits: Partial<Limits> = {}, layer?: number) {
   try {
-    createFarm({ ...config, language, limits }).run(source).step(100_000);
+    createFarm({ ...config, language, limits, layer }).run(source).step(100_000);
   } catch (error) {
     return error as ScriptError;
   }
@@ -33,7 +33,8 @@ describe('the translation files', () => {
 });
 
 /** Every error the engine can raise, with a script that raises it. */
-const CASES: Record<string, { source: string; limits?: Partial<Limits>; pt: RegExp }> = {
+const CASES: Record<string, { source: string; limits?: Partial<Limits>; layer?: number; pt: RegExp }> = {
+  layerLocked: { source: 'wait(3);', layer: 1, pt: /Linha 1: Ainda não liberado: números e textos escritos no código \(camada 2, Valores e terreno\)/ },
   memory: {
     source: 'const rows = [];\nwhile (true) {\n  rows.push([1, 2, 3, 4, 5]);\n}',
     limits: { memoryUnits: 100, computeTicksWithoutCommand: 1_000_000 },
@@ -113,9 +114,9 @@ describe('script errors', () => {
     expect(Object.keys(CASES).sort()).toEqual(codes);
   });
 
-  it.each(Object.entries(CASES))('%s: raised with its code, line, cause and tip, in both languages', (code, { source, limits, pt }) => {
-    const english = fail(source, 'en', limits);
-    const portuguese = fail(source, 'pt-BR', limits);
+  it.each(Object.entries(CASES))('%s: raised with its code, line, cause and tip, in both languages', (code, { source, limits, layer, pt }) => {
+    const english = fail(source, 'en', limits, layer);
+    const portuguese = fail(source, 'pt-BR', limits, layer);
 
     expect(english).toBeInstanceOf(ScriptError);
     expect(english.code).toBe(code);

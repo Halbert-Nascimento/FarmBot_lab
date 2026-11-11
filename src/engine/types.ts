@@ -29,6 +29,11 @@ export interface FarmConfig {
   readonly limits?: Partial<Limits>;
   /** The language of the error messages. The commands answer to their English and Portuguese names whatever it is. Defaults to English. */
   readonly language?: Language;
+  /**
+   * How many layers of the language the player has unlocked, from 1 to 10 (GDD 11.2). A script that uses
+   * something from a later layer is refused whole, before anything runs. Left out, every layer is unlocked.
+   */
+  readonly layer?: number;
 }
 
 export interface Position {
