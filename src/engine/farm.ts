@@ -32,15 +32,15 @@ export interface FarmState {
   };
 }
 
-/** A change of farm state, stamped with the tick at which the action completed. */
+/** A change of farm state, stamped with the exact time (in deciticks) at which the action completed. */
 export type FarmEvent =
-  | { readonly type: 'planted'; readonly tick: number; readonly at: Position; readonly species: PlantSpecies }
-  | { readonly type: 'harvested'; readonly tick: number; readonly at: Position }
-  | { readonly type: 'moved'; readonly tick: number; readonly from: Position; readonly to: Position }
-  | { readonly type: 'bumped'; readonly tick: number; readonly at: Position };
+  | { readonly type: 'planted'; readonly timeDeciticks: number; readonly at: Position; readonly species: PlantSpecies }
+  | { readonly type: 'harvested'; readonly timeDeciticks: number; readonly at: Position }
+  | { readonly type: 'moved'; readonly timeDeciticks: number; readonly from: Position; readonly to: Position }
+  | { readonly type: 'bumped'; readonly timeDeciticks: number; readonly at: Position };
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
-type EmittableEvent = DistributiveOmit<FarmEvent, 'tick'>;
+type EmittableEvent = DistributiveOmit<FarmEvent, 'timeDeciticks'>;
 
 export interface Meter {
   /** Time spent by the run, in deciticks (integer). */
@@ -102,7 +102,7 @@ export function createFarm(config: FarmConfig): Farm {
       field: { width: config.width, height: config.height, cells },
     });
   const emit = (event: EmittableEvent) => {
-    events.push({ ...event, tick: clock.ticks } as FarmEvent);
+    events.push({ ...event, timeDeciticks: clock.deciticks } as FarmEvent);
   };
   let drone: Position = { x: 0, y: 0 };
   const cellAtDrone = () => cells[drone.y * config.width + drone.x];

@@ -47,7 +47,7 @@ move(Dir.EAST);`);
 });
 
 describe('farm events', () => {
-  it('emits one event per state change, stamped with the tick it completed at', () => {
+  it('emits one event per state change, stamped with the exact time it completed at, in deciticks', () => {
     const farm = newFarm();
 
     farm.run(`plant(Plant.GRASS);
@@ -57,10 +57,10 @@ move(Dir.NORTH);
 harvest();`).step(100);
 
     expect(farm.drainEvents()).toEqual([
-      { type: 'planted', tick: 6, at: { x: 0, y: 0 }, species: 'grass' },
-      { type: 'harvested', tick: 12, at: { x: 0, y: 0 } },
-      { type: 'moved', tick: 20, from: { x: 0, y: 0 }, to: { x: 1, y: 0 } },
-      { type: 'bumped', tick: 28, at: { x: 1, y: 0 } },
+      { type: 'planted', timeDeciticks: 60, at: { x: 0, y: 0 }, species: 'grass' },
+      { type: 'harvested', timeDeciticks: 120, at: { x: 0, y: 0 } },
+      { type: 'moved', timeDeciticks: 200, from: { x: 0, y: 0 }, to: { x: 1, y: 0 } },
+      { type: 'bumped', timeDeciticks: 280, at: { x: 1, y: 0 } },
     ]);
   });
 
