@@ -10,7 +10,8 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bench": "vitest run src/engine/performance.test.ts --disable-console-intercept"
   },
   "dependencies": {
     "acorn": "^8.19.0",
