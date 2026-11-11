@@ -24,6 +24,18 @@ _Avoid_: solo, superfície
 Uma espécie cultivável, com regra própria, uso econômico e conceito de programação associado.
 _Avoid_: cultura, cultivo
 
+**Item**:
+Algo que a fazenda produz e guarda no estoque: feno ou trigo.
+_Avoid_: recurso, produto, material
+
+**Estoque**:
+A quantidade de cada item que a fazenda guarda.
+_Avoid_: inventário, mochila
+
+**Estágio de crescimento**:
+A fase de uma planta plantada: broto, crescendo ou pronta.
+_Avoid_: fase, nível de maturidade
+
 **Drone**:
 O agente que executa o script do jogador na fazenda.
 _Avoid_: robô, bot

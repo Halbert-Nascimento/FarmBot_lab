@@ -90,6 +90,7 @@ export function createEnvironment(world: World): Environment {
           world.emit({ type: 'logged', values: structuredClone(args) });
         },
       }),
+      random: sensor('random', () => world.rng.next()),
       getPos: sensor('getPos', () => ({ ...world.drone })),
       getSize: sensor('getSize', () => ({ width: world.config.width, height: world.config.height })),
       getPlant: sensor('getPlant', () => world.cellAtDrone()?.plant?.species ?? null),

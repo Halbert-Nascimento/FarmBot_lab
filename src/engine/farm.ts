@@ -31,7 +31,7 @@ export function createFarm(config: FarmConfig): Farm {
     getStateHash: () =>
       hashString(
         JSON.stringify([
-          config.seed,
+          world.rng.state,
           clock.deciticks,
           world.drone.x,
           world.drone.y,

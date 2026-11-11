@@ -15,6 +15,10 @@ Identificadores e comentários do código ficam em **inglês**. Documentação, 
 | Script | `Script` |
 | Execução | `Run` |
 | Comando | `Command` |
+| Sensor (comando que só lê) | `sensor` |
+| Item | `Item` (`hay`, `wheat`) |
+| Estoque | `Stock` |
+| Estágio de crescimento | `GrowthStage` (`sprout`, `growing`, `ready`) |
 | Ação | `Action` |
 | Medidor de execução | `Meter` |
 | Evento da fazenda | `FarmEvent` |

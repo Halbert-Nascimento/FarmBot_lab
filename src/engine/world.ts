@@ -1,6 +1,8 @@
 import { createClock } from './clock';
 import type { Clock } from './clock';
 import type { PlantedPlant } from './plants';
+import { createRng } from './rng';
+import type { Rng } from './rng';
 import type { FarmConfig, FarmEvent, Item, Position, Terrain } from './types';
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -15,6 +17,7 @@ export interface MutableCell {
 export interface World {
   readonly config: FarmConfig;
   readonly clock: Clock;
+  readonly rng: Rng;
   readonly cells: MutableCell[];
   drone: Position;
   readonly stock: Record<Item, number>;
@@ -30,6 +33,7 @@ export function createWorld(config: FarmConfig): World {
   const world: World = {
     config,
     clock,
+    rng: createRng(config.seed),
     cells: Array.from({ length: config.width * config.height }, () => ({ terrain: 'grass', plant: null })),
     drone: { x: 0, y: 0 },
     stock: { hay: 0, wheat: 0 },

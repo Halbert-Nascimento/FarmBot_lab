@@ -40,3 +40,18 @@ A equivalência entre velocidades, e entre execução com e sem visualização, 
 ## Teste com pessoa de fora (critério 6)
 
 A pessoa não participou do desenvolvimento, não conhece o jogo, tem familiaridade básica com computador, não precisa saber programar e recebe só as instruções do próprio protótipo. Se precisar de ajuda, registra-se onde teve dificuldade, sem orientar durante o teste. A data e a pessoa são definidas quando o protótipo estiver executável e os cinco primeiros critérios estiverem prontos. A fatia só fecha com o resultado desse teste.
+
+## Regras provisórias decididas na implementação
+
+Pontos pequenos que o GDD não fixava e que o motor adotou. Valem até o balanceamento ou a revisão em um ticket futuro.
+
+- Uma ação é atômica: cobra o custo e aplica o efeito. `step(n)` aceita só inteiros não negativos e pode ultrapassar o orçamento por no máximo uma ação.
+- Uma ação age sobre o mundo **como ele estava no início dela**. Por isso colher uma planta que amadurece durante os 6 ticks da própria colheita ainda a destrói.
+- Bater na borda, plantar em lugar inválido e arar casa ocupada **gastam os ticks** e emitem um aviso (`bumped` ou `rejected`), sem alterar o mundo.
+- Ordem das recusas ao plantar: casa ocupada, terreno errado, estoque insuficiente.
+- Estágios: broto no primeiro terço do tempo de crescimento, crescendo até completar, pronta ao completar. O progresso é um inteiro de 0 a 100.
+- Rendimento de 1 item por colheita pronta (capim rende 1 feno, trigo rende 1 trigo). Capim cresce em 120 ticks e trigo em 160.
+- Sensores e `random()` custam 1 tick. `log` não custa nada. `wait` aceita só número inteiro de ticks.
+- Eventos são carimbados em décimos de tick (`timeDeciticks`).
+- **Pendente para a visualização (ticket da cena 3D):** o motor ainda não emite evento de mudança de estágio de crescimento. A visualização hoje precisaria ler o estado para saber o estágio.
+
