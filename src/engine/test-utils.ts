@@ -1,6 +1,6 @@
 import { createFarm } from './index';
 
-const config = { width: 3, height: 2, seed: 1 };
+export const config = { width: 3, height: 2, seed: 1 };
 
 /** Runs a script to the end on a fresh farm and returns what it logged, one list of values per `log` call. */
 export function logged(source: string, budget = 100_000) {

@@ -59,9 +59,10 @@ Pontos pequenos que o GDD não fixava e que o motor adotou. Valem até o balance
 
 ## Linguagem do jogador: o que o motor aceita hoje (ticket 3A)
 
-- Variáveis `let` e `const` com escopo de bloco, `if`/`else`, `for`, `while`, `break`, funções (declaração, expressão e seta), `return`, closures e recursão. Operadores aritméticos, de comparação, lógicos (`&&`, `||`), unários (`!`, `-`, `+`), atribuição composta e `++`/`--`, todos com a semântica do JavaScript.
+- Variáveis `let` e `const` com escopo de bloco e "zona morta" como no JavaScript (usar antes da linha da declaração é erro, mesmo que exista uma variável de fora com o mesmo nome), `if`/`else`, `for`, `while`, `break`, funções (declaração, expressão e seta), `return`, closures e recursão. Operadores aritméticos, de comparação, lógicos (`&&`, `||`), unários (`!`, `-`, `+`), atribuição composta e `++`/`--`, todos com a semântica do JavaScript.
 - Cada rodada de um `for` ou `while` recebe uma cópia nova das variáveis do laço, então uma closure criada numa rodada enxerga o valor daquela rodada.
-- Ainda não aceitos (ficam para o 3B ou depois): template strings, objetos, listas, `continue`, `typeof`, parâmetros com valor padrão ou desestruturação, `break` com rótulo.
+- Ainda não aceitos (o motor responde "Unsupported syntax" apontando a linha): `var` (pede `let` ou `const`), template strings, objetos, listas, `continue`, `typeof`, operador ternário `?:`, `??`, `||=` e `&&=`, vírgula, parâmetros com valor padrão ou desestruturação, `break` com rótulo e função declarada fora do início de um bloco (por exemplo, como corpo solto de um `if`). Template strings, objetos e listas chegam no 3B. O ternário é um candidato natural, por ser comum em iniciantes.
+- Uma função usada como valor aparece como o texto `[function]` em `log` e nunca é entregue a um comando.
 - Operações do script ainda **não custam tempo**. Só os comandos custam. As operações a 0,1 tick e as chamadas a 0,5 tick chegam no 3B.
 - **Proteção provisória contra laço infinito:** um script é interrompido depois de 10.000 rodadas de laço seguidas sem gastar nenhum tick, apontando a linha. Isso também interrompe um laço longo que só faz contas, até o 3B dar custo às operações. O 3B troca esse limite pelo de ticks sem progresso.
 - Chamadas de função aninhadas além de 200 níveis são interrompidas. Esse limite deve ser revisto antes das fatias com recursão profunda (por exemplo, o labirinto).

@@ -23,7 +23,7 @@ describe('variables', () => {
   });
 
   it('rejects the use of a variable before its declaration', () => {
-    expect((failure('log(a);\nlet a = 1;') as Error).message).toMatch(/Line 1: a is not defined/);
+    expect((failure('log(a);\nlet a = 1;') as Error).message).toMatch(/Line 1: Cannot access 'a' before initialization/);
   });
 
   it('keeps block variables inside their block', () => {

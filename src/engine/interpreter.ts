@@ -12,6 +12,9 @@ import type {
   Statement,
   UpdateExpression,
 } from 'acorn';
+import { BINARY, UNARY } from './operators';
+import { Scope } from './scope';
+import type { Binding } from './scope';
 
 /** A timed operation the script asks the farm to perform. */
 export interface Action {
@@ -57,33 +60,6 @@ export function parseScript(source: string): Program {
   }
 }
 
-interface Binding {
-  value: unknown;
-  readonly constant: boolean;
-}
-
-/** A block of variables. Looking a name up walks outwards through the enclosing scopes. */
-class Scope {
-  private readonly bindings = new Map<string, Binding>();
-
-  constructor(private readonly parent: Scope | null = null) {}
-
-  declare(name: string, value: unknown, constant: boolean): void {
-    this.bindings.set(name, { value, constant });
-  }
-
-  find(name: string): Binding | undefined {
-    return this.bindings.get(name) ?? this.parent?.find(name);
-  }
-
-  /** A sibling scope with its own copy of the same variables (a fresh scope for each loop round). */
-  clone(): Scope {
-    const copy = new Scope(this.parent);
-    for (const [name, binding] of this.bindings) copy.bindings.set(name, { ...binding });
-    return copy;
-  }
-}
-
 /** How a statement ended, when it did not simply run to its end. */
 type Completion = { readonly type: 'break' } | { readonly type: 'return'; readonly value: unknown } | undefined;
 
@@ -99,48 +75,34 @@ class UserFunction {
 /** Calls nested deeper than this are stopped, so a function that calls itself forever cannot hang the game. */
 const MAX_CALL_DEPTH = 200;
 
-type Binary = (a: unknown, b: unknown) => unknown;
-
-// The player's `==` and `!=` follow JavaScript.
-const BINARY: Readonly<Record<string, Binary>> = {
-  '+': (a, b) => (a as number) + (b as number),
-  '-': (a, b) => (a as number) - (b as number),
-  '*': (a, b) => (a as number) * (b as number),
-  '/': (a, b) => (a as number) / (b as number),
-  '%': (a, b) => (a as number) % (b as number),
-  '**': (a, b) => (a as number) ** (b as number),
-  '==': (a, b) => a == b,
-  '!=': (a, b) => a != b,
-  '===': (a, b) => a === b,
-  '!==': (a, b) => a !== b,
-  '<': (a, b) => (a as number) < (b as number),
-  '<=': (a, b) => (a as number) <= (b as number),
-  '>': (a, b) => (a as number) > (b as number),
-  '>=': (a, b) => (a as number) >= (b as number),
+const GLOBALS: Readonly<Record<string, unknown>> = {
+  undefined: undefined,
+  NaN: Number.NaN,
+  Infinity: Number.POSITIVE_INFINITY,
 };
 
-const UNARY: Readonly<Record<string, (value: unknown) => unknown>> = {
-  '!': (v) => !v,
-  '-': (v) => -(v as number),
-  '+': (v) => +(v as number),
-};
-
-const GLOBALS: Readonly<Record<string, unknown>> = { undefined: undefined, NaN: Number.NaN, Infinity: Number.POSITIVE_INFINITY };
+/** What a function looks like to everything outside the interpreter (a log line, a command argument). */
+const FUNCTION_AS_TEXT = '[function]';
 
 /**
  * Interprets a script as a coroutine: it yields every timed action and can be
  * paused between two of them, which is what makes `step(n)` possible.
  */
 export function* interpret(program: Program, env: Environment): Generator<Action, void, unknown> {
-  type Run<T> = Generator<Action, T, unknown>;
+  type Coroutine<T> = Generator<Action, T, unknown>;
 
-  function unsupported(node: Node): never {
-    throw new ScriptError(`Unsupported syntax: ${node.type}`, lineOf(node));
+  /** Function declarations already made available at the start of their block. */
+  const hoisted = new WeakSet<Node>();
+  let depth = 0;
+
+  function unsupported(node: Node, what: string = node.type): never {
+    throw new ScriptError(`Unsupported syntax: ${what}`, lineOf(node));
   }
 
   function lookup(name: string, scope: Scope, node: Node): Binding {
     const binding = scope.find(name);
     if (!binding) throw new ScriptError(`${name} is not defined`, lineOf(node));
+    if (!binding.initialized) throw new ScriptError(`Cannot access '${name}' before initialization`, lineOf(node));
     return binding;
   }
 
@@ -150,12 +112,20 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     binding.value = value;
   }
 
-  function makeFunction(node: ArrowFunctionExpression | FunctionExpression | FunctionDeclaration, scope: Scope): UserFunction {
+  function makeFunction(
+    node: ArrowFunctionExpression | FunctionExpression | FunctionDeclaration,
+    scope: Scope,
+  ): UserFunction {
     const params = node.params.map((param) => (param.type === 'Identifier' ? param.name : unsupported(param)));
     return new UserFunction(params, node.body, scope);
   }
 
-  function* evaluate(node: Expression, scope: Scope): Run<unknown> {
+  function requireFunction(value: unknown, label: string, node: Node): UserFunction {
+    if (!(value instanceof UserFunction)) throw new ScriptError(`${label} is not a function`, lineOf(node));
+    return value;
+  }
+
+  function* evaluate(node: Expression, scope: Scope): Coroutine<unknown> {
     switch (node.type) {
       case 'ArrowFunctionExpression':
       case 'FunctionExpression':
@@ -194,7 +164,7 @@ export function* interpret(program: Program, env: Environment): Generator<Action
       case 'AssignmentExpression':
         return yield* assign(node, scope);
       case 'UpdateExpression':
-        return update(node, scope);
+        return applyUpdate(node, scope);
       case 'CallExpression':
         return yield* call(node, scope);
       default:
@@ -202,7 +172,7 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     }
   }
 
-  function* assign(node: AssignmentExpression, scope: Scope): Run<unknown> {
+  function* assign(node: AssignmentExpression, scope: Scope): Coroutine<unknown> {
     if (node.left.type !== 'Identifier') return unsupported(node.left);
     const right = yield* evaluate(node.right, scope);
     let value = right;
@@ -215,7 +185,7 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     return value;
   }
 
-  function update(node: UpdateExpression, scope: Scope): unknown {
+  function applyUpdate(node: UpdateExpression, scope: Scope): unknown {
     if (node.argument.type !== 'Identifier') return unsupported(node.argument);
     const before = lookup(node.argument.name, scope, node).value as number;
     const after = node.operator === '++' ? before + 1 : before - 1;
@@ -223,14 +193,7 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     return node.prefix ? after : before;
   }
 
-  function asFunction(value: unknown, label: string, node: Node): UserFunction {
-    if (!(value instanceof UserFunction)) throw new ScriptError(`${label} is not a function`, lineOf(node));
-    return value;
-  }
-
-  let depth = 0;
-
-  function* invoke(fn: UserFunction, args: readonly unknown[], node: Node): Run<unknown> {
+  function* invoke(fn: UserFunction, args: readonly unknown[], node: Node): Coroutine<unknown> {
     if (depth >= MAX_CALL_DEPTH) throw new ScriptError('Maximum call depth exceeded', lineOf(node));
     depth++;
     try {
@@ -246,14 +209,13 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     }
   }
 
-  function* call(node: CallExpression, scope: Scope): Run<unknown> {
+  function* call(node: CallExpression, scope: Scope): Coroutine<unknown> {
     const { callee } = node;
     let userFunction: UserFunction | undefined;
     let command: Command | undefined;
     if (callee.type === 'Identifier') {
-      const binding = scope.find(callee.name);
-      if (binding) {
-        userFunction = asFunction(binding.value, callee.name, node);
+      if (scope.find(callee.name)) {
+        userFunction = requireFunction(lookup(callee.name, scope, node).value, callee.name, node);
       } else {
         command = env.commands[callee.name];
         if (!command) throw new ScriptError(`Unknown command: ${callee.name}`, lineOf(node));
@@ -261,7 +223,7 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     } else if (callee.type === 'Super') {
       return unsupported(callee);
     } else {
-      userFunction = asFunction(yield* evaluate(callee, scope), 'Expression', node);
+      userFunction = requireFunction(yield* evaluate(callee, scope), 'Expression', node);
     }
 
     const args: unknown[] = [];
@@ -274,7 +236,8 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     if (!command) return unsupported(node);
     let action: Action;
     try {
-      action = command(args);
+      // Commands belong to the farm: they never get to see the interpreter's own objects.
+      action = command(args.map((arg) => (arg instanceof UserFunction ? FUNCTION_AS_TEXT : arg)));
     } catch (error) {
       throw new ScriptError((error as Error).message, lineOf(node));
     }
@@ -285,13 +248,36 @@ export function* interpret(program: Program, env: Environment): Generator<Action
    * Marks one round of a loop. It spends no time, but lets the farm count the rounds that
    * made no progress and stop a loop that never will.
    */
-  function* markRound(node: Node): Run<void> {
+  function* markRound(node: Node): Coroutine<void> {
     yield { deciticks: 0, apply: () => undefined, line: lineOf(node) };
   }
 
-  function* executeAll(statements: readonly Statement[], scope: Scope): Run<Completion> {
+  /** Runs one round of a loop. Returns how the loop ends, or `undefined` to go on with the next round. */
+  function* runRound(
+    node: Node,
+    test: Expression | null | undefined,
+    body: Statement,
+    scope: Scope,
+  ): Coroutine<{ readonly completion: Completion } | undefined> {
+    yield* markRound(node);
+    if (test && !(yield* evaluate(test, scope))) return { completion: undefined };
+    const completion = yield* execute(body, scope);
+    if (completion?.type === 'break') return { completion: undefined };
+    return completion ? { completion } : undefined;
+  }
+
+  function* executeAll(statements: readonly Statement[], scope: Scope): Coroutine<Completion> {
+    // Like JavaScript: functions can be called before their line, and a `let` or `const` exists
+    // from the start of its block but cannot be used until its line runs.
     for (const statement of statements) {
-      if (statement.type === 'FunctionDeclaration') scope.declare(statement.id.name, makeFunction(statement, scope), false);
+      if (statement.type === 'FunctionDeclaration') {
+        hoisted.add(statement);
+        scope.declare(statement.id.name, makeFunction(statement, scope), false);
+      } else if (statement.type === 'VariableDeclaration' && statement.kind !== 'var') {
+        for (const declarator of statement.declarations) {
+          if (declarator.id.type === 'Identifier') scope.reserve(declarator.id.name, statement.kind === 'const');
+        }
+      }
     }
     for (const statement of statements) {
       const completion = yield* execute(statement, scope);
@@ -300,12 +286,13 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     return undefined;
   }
 
-  function* execute(node: Statement, scope: Scope): Run<Completion> {
+  function* execute(node: Statement, scope: Scope): Coroutine<Completion> {
     switch (node.type) {
       case 'ExpressionStatement':
         yield* evaluate(node.expression, scope);
         return undefined;
       case 'VariableDeclaration':
+        if (node.kind === 'var') return unsupported(node, 'var, use let or const');
         for (const declarator of node.declarations) {
           if (declarator.id.type !== 'Identifier') return unsupported(declarator.id);
           const value = declarator.init ? yield* evaluate(declarator.init, scope) : undefined;
@@ -320,22 +307,16 @@ export function* interpret(program: Program, env: Environment): Generator<Action
         return undefined;
       case 'WhileStatement':
         while (true) {
-          yield* markRound(node);
-          if (!(yield* evaluate(node.test, scope))) return undefined;
-          const completion = yield* execute(node.body, scope);
-          if (completion?.type === 'break') return undefined;
-          if (completion) return completion;
+          const exit = yield* runRound(node, node.test, node.body, scope);
+          if (exit) return exit.completion;
         }
       case 'ForStatement': {
         let round = new Scope(scope);
         if (node.init?.type === 'VariableDeclaration') yield* execute(node.init, round);
         else if (node.init) yield* evaluate(node.init, round);
         while (true) {
-          yield* markRound(node);
-          if (node.test && !(yield* evaluate(node.test, round))) return undefined;
-          const completion = yield* execute(node.body, round);
-          if (completion?.type === 'break') return undefined;
-          if (completion) return completion;
+          const exit = yield* runRound(node, node.test, node.body, round);
+          if (exit) return exit.completion;
           round = round.clone();
           if (node.update) yield* evaluate(node.update, round);
         }
@@ -343,7 +324,8 @@ export function* interpret(program: Program, env: Environment): Generator<Action
       case 'ReturnStatement':
         return { type: 'return', value: node.argument ? yield* evaluate(node.argument, scope) : undefined };
       case 'FunctionDeclaration':
-        return undefined;
+        // Only a declaration at the start of a block is made available; anywhere else it would be ignored.
+        return hoisted.has(node) ? undefined : unsupported(node);
       case 'BreakStatement':
         if (node.label) return unsupported(node);
         return { type: 'break' };

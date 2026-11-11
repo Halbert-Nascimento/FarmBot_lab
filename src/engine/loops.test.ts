@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createFarm, ScriptError } from './index';
-import { failure, logged } from './test-utils';
-
-const config = { width: 3, height: 2, seed: 1 };
+import { config, failure, logged } from './test-utils';
 
 describe('for', () => {
   it('repeats the body while the condition holds', () => {
