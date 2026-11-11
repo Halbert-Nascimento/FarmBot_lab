@@ -1,0 +1,50 @@
+# Dependências
+node_modules/
+.pnpm-store/
+.yarn/
+.npm/
+
+# Builds e saídas
+dist/
+build/
+out/
+coverage/
+.cache/
+.parcel-cache/
+.vite/
+.next/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Variáveis de ambiente e segredos
+.env
+.env.*
+!.env.example
+
+# Editor / IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporários locais
+.scratch/
+tmp/
+*.tmp
+
+# Claude Code (configuração local)
+.claude/settings.local.json
