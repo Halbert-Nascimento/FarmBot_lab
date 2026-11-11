@@ -42,6 +42,8 @@ Identificadores e comentários do código ficam em **inglês**. Documentação, 
 | Motor de simulação | pasta `src/engine/` |
 | Visualização | pasta `src/view/` |
 | Cena | `FarmScene` |
+| Console | `ConsoleEntry` (uma linha) |
+| Sessão | `Session` |
 
 Comandos do jogador têm nome em inglês e em português (REQ-FND-41), definidos pelo GDD §9. Os nomes em inglês são os identificadores internos, e os nomes em português são apelidos.
 

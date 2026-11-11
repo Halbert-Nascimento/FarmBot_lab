@@ -1,4 +1,4 @@
-import type { Farm, Run } from '../engine';
+import type { Farm, FarmEvent, Run } from '../engine';
 import type { FarmScene } from './farm-scene';
 
 /** How many simulation ticks pass in a second of real time at speed 1. Only the pace of the view: the engine never sees it. */
@@ -36,30 +36,29 @@ export class Player {
     return this.run.isFinished;
   }
 
-  /** Lets `seconds` of real time pass at the current speed. */
-  advance(seconds: number): void {
-    if (this.speed === 'instant') {
-      this.advanceTicks(INSTANT_TICKS_PER_FRAME);
-      return;
-    }
+  /** Lets `seconds` of real time pass at the current speed. Returns what happened on the farm meanwhile. */
+  advance(seconds: number): readonly FarmEvent[] {
+    if (this.speed === 'instant') return this.advanceTicks(INSTANT_TICKS_PER_FRAME);
     // Time or speed that make no sense (NaN, negative, infinite) must not corrupt the count for good.
-    if (!Number.isFinite(seconds) || seconds <= 0 || !Number.isFinite(this.speed) || this.speed <= 0) return;
+    if (!Number.isFinite(seconds) || seconds <= 0 || !Number.isFinite(this.speed) || this.speed <= 0) return [];
     this.owed += seconds * TICKS_PER_SECOND * this.speed;
     const whole = Math.floor(this.owed);
     this.owed -= whole;
-    this.advanceTicks(whole);
+    return this.advanceTicks(whole);
   }
 
-  /** Asks the engine for exactly `ticks` more whole ticks, then shows what happened. */
-  advanceTicks(ticks: number): void {
-    if (!Number.isInteger(ticks) || ticks <= 0 || this.run.isFinished) return;
+  /** Asks the engine for exactly `ticks` more whole ticks, shows what happened and returns it. */
+  advanceTicks(ticks: number): readonly FarmEvent[] {
+    if (!Number.isInteger(ticks) || ticks <= 0 || this.run.isFinished) return [];
     this.given += ticks;
     try {
       this.run.step(ticks);
     } catch (error) {
       this.error = error;
     }
-    this.scene.handle(this.farm.drainEvents());
+    const events = this.farm.drainEvents();
+    this.scene.handle(events);
     this.scene.sync(this.farm.getState());
+    return events;
   }
 }

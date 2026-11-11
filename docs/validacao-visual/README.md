@@ -31,6 +31,28 @@ Sequência em `marco-2-tick-*.png`: o drone planta uma fileira de capim (broto),
 
 Legibilidade: as casas, o solo arado e as plantas seguem distinguíveis. O drone sozinho virava um pontinho, então ele cresce com o tamanho do campo e tem um anel azul no chão.
 
+## Marco 4: a interface (issue #12)
+
+Fluxo de primeiro uso, com cliques e teclado de verdade no Edge (`pnpm capture 4 docs/validacao-visual`). O log completo está em `console-marco-4.log`.
+
+| Captura | O que mostra |
+| --- | --- |
+| `marco-4-01-abertura-pt.png` | A página ao abrir em português: instruções, script de exemplo, botões, fazenda e console vazio |
+| `marco-4-02-executando.png` | Depois de clicar em Executar: o drone plantando |
+| `marco-4-03-pausado.png` | Pausado: o estado não muda enquanto está em pausa |
+| `marco-4-04-terminou.png` | Fim da execução: console com as colheitas, o `registrar` e os ticks gastos |
+| `marco-4-05-reiniciado.png` | Depois de Reiniciar: fazenda igual à do início (mesmo hash), medidor em 0.0 |
+| `marco-4-06-script-digitado.png` | Um script digitado no editor e executado com Ctrl+Enter |
+| `marco-4-07-erro-pt.png` | Uma recusa da fazenda, um aviso e um erro com linha, sugestão e dica, em português |
+| `marco-4-08-erro-en.png` | O mesmo console depois de trocar o idioma para inglês |
+| `marco-4-09-ajuda-comandos-en.png` | A lista de ordens que o drone entende, em inglês |
+| `marco-4-10-abertura-en.png` | A página ao abrir em inglês, com o exemplo em inglês |
+| `marco-4-11-janela-estreita.png` | Janela estreita (420 px): editor em cima, fazenda embaixo |
+
+Medidas do log: as quatro velocidades (1×, 4×, 16× e instantâneo) terminam com o mesmo hash e os mesmos 171.0 ticks; a pausa mantém o hash; Reiniciar volta ao hash inicial.
+
+Defeito achado por esta validação: o atalho Ctrl+Enter não executava, porque o editor usava essa tecla para abrir uma linha em branco. Corrigido.
+
 ## Problemas achados durante a validação, e o que foi feito
 
 1. **O crescimento das plantas não aparecia.** Um `wait(500)` fazia o relógio do motor pular 500 ticks de uma vez, e as plantas surgiam já prontas. Corrigido no motor: `step` cobra o custo de uma ação aos poucos e só aplica o efeito no fim, então o motor anda exatamente o que a tela pede.

@@ -69,6 +69,30 @@ A visualização é um protótipo descartável em `src/view/`, em Three.js puro.
 - **Câmera:** provisória (perspectiva fixa que enquadra o campo todo). A decisão da câmera é dos tickets #13 e #14. Não há editor nem controles ainda (ticket #12): a página recebe tudo pelo endereço, por exemplo `?w=16&h=16&demo=sweep&speed=16`, e `paused` a deixa parada.
 - **Como rodar:** `pnpm dev` abre a página. Para a validação visual, com `pnpm dev` rodando em outro terminal, `pnpm capture <marco> <pasta>` (marco 1, 2 ou 3) abre a página no Edge, tira capturas e grava o log do console. As capturas e os logs aprovados ficam em `docs/validacao-visual/`. O script usa `playwright-core` e o Edge instalado; não roda no CI.
 
+## Editor e interface (issue #12)
+
+A página junta três partes que não se conhecem, e uma quarta que as coordena:
+
+- **Editor** (`editor.ts`, CodeMirror 6): só guarda texto. Não conhece a fazenda, a cena nem o motor.
+- **Cena** (`farm-scene.ts` e `stage.ts`): só desenha.
+- **Sessão** (`session.ts`): o que os botões fazem, sem nenhum botão. Coordena o motor, a cena e o console, e é testada sem navegador.
+- **Interface** (`app.ts`): monta a página e passa os recados entre as três. É a única que conhece todas.
+
+Regras da interface, decididas com o responsável:
+
+- **Executar** sempre recomeça a fazenda do zero, com a mesma semente, e roda o código do editor. O mesmo código dá sempre o mesmo resultado. Se já havia uma execução, ela é descartada antes: nunca há duas ao mesmo tempo. O atalho é Ctrl+Enter.
+- **Reiniciar** devolve a fazenda ao estado inicial e não roda nada.
+- **Pausar** segura a fazenda; **Continuar** segue de onde parou, sem mudar o resultado.
+- **Velocidades:** 1×, 4×, 16× e instantâneo. Só mudam o ritmo em que a tela pede tempo ao motor.
+- **Medidor:** os ticks da execução, sempre com uma casa decimal, durante e depois dela.
+- **Console:** o que `log`/`registrar` escreve (com o tick), cada colheita, os avisos (planta perdida por colher cedo, drone batendo na borda, recusas da fazenda em palavras simples), os erros do script com linha, causa, sugestão e dica, e uma linha final com os ticks gastos. Guarda no máximo 300 linhas. As linhas são guardadas como fatos, não como texto, então o console inteiro muda de idioma na hora.
+- **Idioma:** abre no idioma do navegador (`pt` vira português, qualquer outro vira inglês), com um botão para trocar a qualquer momento. A troca muda a interface, as instruções, o console e o script de exemplo (se o jogador ainda não mexeu nele), e vale para os erros da execução seguinte. A escolha fica lembrada no navegador. Os comandos continuam valendo nos dois idiomas.
+- **Camada:** a página não define `layer`, então toda a sintaxe está liberada. A progressão por camadas entra quando o bloqueio de comandos (#16) existir.
+- **Instruções:** o painel "Como jogar" fica aberto, com quatro passos, a explicação dos ticks e a lista de ordens que o drone entende, com os nomes no idioma escolhido.
+- **Textos fora do código:** `src/view/locales/en.json` e `pt-BR.json`, com teste de chaves e campos iguais, e um teste que exige explicação para todo comando do motor.
+
+Para testar à mão, o endereço aceita `w`, `h`, `seed`, `speed`, `lang`, `demo` (`garden` ou `sweep`), `autorun` e `paused`.
+
 ## Sintaxe por camada (issue #8)
 
 - **Configuração:** `FarmConfig.layer` (inteiro de 1 a 10). Sem ele, todas as camadas ficam liberadas (modo livre, REQ-ENS-41). Valor fora disso faz a criação da fazenda falhar.

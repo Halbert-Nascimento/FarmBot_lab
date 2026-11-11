@@ -153,6 +153,14 @@ _Avoid_: núcleo (minúsculo)
 A parte que implementa as regras do jogo e roda sem interface.
 _Avoid_: engine, backend
 
+**Console**:
+A lista do que aconteceu numa execução, embaixo do editor: o que o script escreveu, colheitas, avisos, erros e os ticks gastos.
+_Avoid_: terminal, log (como nome do painel), saída
+
+**Sessão**:
+O que o jogador faz na página: executar, pausar, continuar e reiniciar. Executar sempre recomeça a fazenda do zero, com a mesma semente.
+_Avoid_: partida, jogo salvo
+
 **Cena**:
 O desenho 3D da fazenda dentro da visualização: casas, plantas e drone. Segue o estado e os eventos do motor e nunca decide nada sobre a fazenda.
 _Avoid_: mundo (reservado ao estado interno do motor), mapa
