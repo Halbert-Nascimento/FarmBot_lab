@@ -38,10 +38,18 @@ Conclusão: o limite atual é seguro **nesta máquina e no V8**; os valores fica
 
 ## Considered Options
 
-Os motivos abaixo foram revisados contra a documentação publicada de cada projeto. Onde a fonte não bastou, está dito.
+Os motivos abaixo foram conferidos nas páginas oficiais de cada projeto. Cada item separa o que a fonte afirma do que é inferência nossa.
 
-- **`js-interpreter`** (usado no jogo antigo; JS-Interpreter de Neil Fraser): a documentação o descreve como um interpretador de JavaScript **ES5**, que executa o código passo a passo e depende do Acorn. O passo a passo existe, então a pausa não é o problema; o motivo é a **linguagem** (ES5 não tem `let`/`const`, setas nem template strings, que são o tipo de JS moderno que o jogo ensina) e o **custo por operação**: cobrar valores diferentes por tipo de nó exigiria alterar a biblioteca. A parte do ES5 está confirmada na documentação; a de "exigiria alterar" é uma inferência de projeto, não uma citação. Fontes: [documentação do JS-Interpreter](https://code4fukui.github.io/JS-Interpreter/docs.html) (espelho); a conferência no repositório oficial `NeilFraser/JS-Interpreter` não foi possível nesta sessão.
-- **QuickJS compilado para WebAssembly** (por exemplo `quickjs-emscripten`): aceita o JS completo e isola bem. O mecanismo de interrupção documentado é uma função chamada "regularmente" pelo motor, usada para implementar um tempo limite (`setInterruptHandler`). Isso confirma que a interrupção é **periódica**, não por operação. A parte "sem cobrar custo por operação" decorre disso, mas a documentação lida não detalha a granularidade. Fonte: [README do quickjs-emscripten](https://cdn.jsdelivr.net/npm/quickjs-emscripten@0.32.0/README.md) (espelho).
+- **`js-interpreter`** (usado no jogo antigo; JS-Interpreter de Neil Fraser).
+  - *Documentado:* executa **ES5** "linha a linha"; "por padrão, um passo é uma única operação"; depende do Acorn; na seção de limitações, diz que acréscimos recentes do JavaScript, "como `let` ou `Set`", não são implementados. Dois exemplos, não uma lista completa: `const`, funções de seta e template strings não são citados, e, sendo ES5, devem ser tratados como ausentes.
+  - *Não documentado:* qualquer custo diferente por operação ou orçamento configurável. Os laços infinitos são tratados limitando o número de chamadas a `step`.
+  - *Inferência nossa:* cobrar valores diferentes por tipo de nó exigiria alterar a biblioteca. Não é fato citado em fonte.
+  - Fontes: [documentação](https://neil.fraser.name/software/JS-Interpreter/docs.html) e [repositório oficial](https://github.com/NeilFraser/JS-Interpreter) (a leitura do repositório cobriu só o início do README; o código e as demonstrações não foram examinados).
+- **QuickJS compilado para WebAssembly** (por exemplo `quickjs-emscripten`).
+  - *Documentado:* o motor aceita "a maior parte do ES2025"; `JS_SetInterruptHandler()` define uma função "chamada regularmente" durante a execução, que pode implementar um tempo limite; existem limites de memória (`JS_SetMemoryLimit`) e de pilha (`JS_SetMaxStackSize`).
+  - *Não documentado:* a frequência da interrupção (a fonte diz apenas "regularmente", sem intervalo nem contagem de instruções) e a semântica do valor devolvido pela função.
+  - *Inferência nossa:* como a interrupção é periódica e não por operação, não daria o custo por tipo de operação que o jogo exige. A granularidade exata não foi confirmada.
+  - Fonte: [documentação técnica do QuickJS](https://github.com/bellard/quickjs/blob/master/doc/quickjs.texi) (leitura parcial: o texto depois da seção de números não foi lido; a assinatura em C do callback está em `quickjs.h`, não lido).
 
 ## Consequences
 
