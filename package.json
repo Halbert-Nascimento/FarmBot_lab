@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "acorn": "^8.19.0",
     "codemirror": "^6.0.2",
     "three": "^0.187.0"
   },

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      acorn:
+        specifier: ^8.19.0
+        version: 8.19.0
       codemirror:
         specifier: ^6.0.2
         version: 6.0.2
