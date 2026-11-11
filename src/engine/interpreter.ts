@@ -1,5 +1,17 @@
 import { parse } from 'acorn';
-import type { AssignmentExpression, CallExpression, Expression, Node, Program, Statement, UpdateExpression } from 'acorn';
+import type {
+  ArrowFunctionExpression,
+  AssignmentExpression,
+  BlockStatement,
+  CallExpression,
+  Expression,
+  FunctionDeclaration,
+  FunctionExpression,
+  Node,
+  Program,
+  Statement,
+  UpdateExpression,
+} from 'acorn';
 
 /** A timed operation the script asks the farm to perform. */
 export interface Action {
@@ -73,7 +85,19 @@ class Scope {
 }
 
 /** How a statement ended, when it did not simply run to its end. */
-type Completion = { readonly type: 'break' } | undefined;
+type Completion = { readonly type: 'break' } | { readonly type: 'return'; readonly value: unknown } | undefined;
+
+/** A function the player wrote. It remembers the scope it was written in. */
+class UserFunction {
+  constructor(
+    readonly params: readonly string[],
+    readonly body: BlockStatement | Expression,
+    readonly scope: Scope,
+  ) {}
+}
+
+/** Calls nested deeper than this are stopped, so a function that calls itself forever cannot hang the game. */
+const MAX_CALL_DEPTH = 200;
 
 type Binary = (a: unknown, b: unknown) => unknown;
 
@@ -126,8 +150,16 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     binding.value = value;
   }
 
+  function makeFunction(node: ArrowFunctionExpression | FunctionExpression | FunctionDeclaration, scope: Scope): UserFunction {
+    const params = node.params.map((param) => (param.type === 'Identifier' ? param.name : unsupported(param)));
+    return new UserFunction(params, node.body, scope);
+  }
+
   function* evaluate(node: Expression, scope: Scope): Run<unknown> {
     switch (node.type) {
+      case 'ArrowFunctionExpression':
+      case 'FunctionExpression':
+        return makeFunction(node, scope);
       case 'Literal':
         return node.value;
       case 'Identifier':
@@ -191,18 +223,55 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     return node.prefix ? after : before;
   }
 
-  function* call(node: CallExpression, scope: Scope): Run<unknown> {
-    if (node.callee.type !== 'Identifier') {
-      throw new ScriptError('Unsupported call', lineOf(node));
+  function asFunction(value: unknown, label: string, node: Node): UserFunction {
+    if (!(value instanceof UserFunction)) throw new ScriptError(`${label} is not a function`, lineOf(node));
+    return value;
+  }
+
+  let depth = 0;
+
+  function* invoke(fn: UserFunction, args: readonly unknown[], node: Node): Run<unknown> {
+    if (depth >= MAX_CALL_DEPTH) throw new ScriptError('Maximum call depth exceeded', lineOf(node));
+    depth++;
+    try {
+      const local = new Scope(fn.scope);
+      fn.params.forEach((name, index) => local.declare(name, args[index], false));
+      if (fn.body.type === 'BlockStatement') {
+        const completion = yield* executeAll(fn.body.body, local);
+        return completion?.type === 'return' ? completion.value : undefined;
+      }
+      return yield* evaluate(fn.body, local);
+    } finally {
+      depth--;
     }
-    const command = env.commands[node.callee.name];
-    if (!command) throw new ScriptError(`Unknown command: ${node.callee.name}`, lineOf(node));
+  }
+
+  function* call(node: CallExpression, scope: Scope): Run<unknown> {
+    const { callee } = node;
+    let userFunction: UserFunction | undefined;
+    let command: Command | undefined;
+    if (callee.type === 'Identifier') {
+      const binding = scope.find(callee.name);
+      if (binding) {
+        userFunction = asFunction(binding.value, callee.name, node);
+      } else {
+        command = env.commands[callee.name];
+        if (!command) throw new ScriptError(`Unknown command: ${callee.name}`, lineOf(node));
+      }
+    } else if (callee.type === 'Super') {
+      return unsupported(callee);
+    } else {
+      userFunction = asFunction(yield* evaluate(callee, scope), 'Expression', node);
+    }
 
     const args: unknown[] = [];
     for (const arg of node.arguments) {
       if (arg.type === 'SpreadElement') return unsupported(arg);
       args.push(yield* evaluate(arg, scope));
     }
+    if (userFunction) return yield* invoke(userFunction, args, node);
+
+    if (!command) return unsupported(node);
     let action: Action;
     try {
       action = command(args);
@@ -221,6 +290,9 @@ export function* interpret(program: Program, env: Environment): Generator<Action
   }
 
   function* executeAll(statements: readonly Statement[], scope: Scope): Run<Completion> {
+    for (const statement of statements) {
+      if (statement.type === 'FunctionDeclaration') scope.declare(statement.id.name, makeFunction(statement, scope), false);
+    }
     for (const statement of statements) {
       const completion = yield* execute(statement, scope);
       if (completion) return completion;
@@ -250,7 +322,9 @@ export function* interpret(program: Program, env: Environment): Generator<Action
         while (true) {
           yield* markRound(node);
           if (!(yield* evaluate(node.test, scope))) return undefined;
-          if ((yield* execute(node.body, scope))?.type === 'break') return undefined;
+          const completion = yield* execute(node.body, scope);
+          if (completion?.type === 'break') return undefined;
+          if (completion) return completion;
         }
       case 'ForStatement': {
         let round = new Scope(scope);
@@ -259,11 +333,17 @@ export function* interpret(program: Program, env: Environment): Generator<Action
         while (true) {
           yield* markRound(node);
           if (node.test && !(yield* evaluate(node.test, round))) return undefined;
-          if ((yield* execute(node.body, round))?.type === 'break') return undefined;
+          const completion = yield* execute(node.body, round);
+          if (completion?.type === 'break') return undefined;
+          if (completion) return completion;
           round = round.clone();
           if (node.update) yield* evaluate(node.update, round);
         }
       }
+      case 'ReturnStatement':
+        return { type: 'return', value: node.argument ? yield* evaluate(node.argument, scope) : undefined };
+      case 'FunctionDeclaration':
+        return undefined;
       case 'BreakStatement':
         if (node.label) return unsupported(node);
         return { type: 'break' };
