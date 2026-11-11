@@ -1,6 +1,8 @@
+import type { Item } from './items';
+
+export type { Item };
 export type Terrain = 'grass' | 'tilled';
 export type PlantSpecies = 'grass' | 'wheat';
-export type Item = 'hay' | 'wheat';
 export type GrowthStage = 'sprout' | 'growing' | 'ready';
 
 /** A planted plant as seen from outside: its species, growth stage and progress (0 to 100). */

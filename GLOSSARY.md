@@ -58,6 +58,18 @@ _Avoid_: run, partida
 Uma função do jogo que o script chama para agir (mover, plantar, colher) ou para ler a fazenda (sensores).
 _Avoid_: instrução, função nativa, API (como nome do conceito)
 
+**Sensor**:
+Um comando que só lê a fazenda, sem alterá-la, e custa 1 tick.
+_Avoid_: leitor, consulta
+
+**Planta plantada**:
+Uma planta que está numa casa, com estágio de crescimento e progresso.
+_Avoid_: cultura, cultivo
+
+**Recusa**:
+Uma ação que não teve efeito (casa ocupada, terreno errado, estoque insuficiente) mas gastou seus ticks, avisada por um evento.
+_Avoid_: falha, erro (erro é o que interrompe o script)
+
 **Ação**:
 Uma operação do drone que consome ticks e muda a fazenda.
 _Avoid_: tarefa, passo

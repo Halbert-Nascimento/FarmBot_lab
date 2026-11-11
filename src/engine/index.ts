@@ -16,6 +16,7 @@ export type {
   Stock,
   Terrain,
 } from './types';
+export { ITEMS } from './items';
 export { ScriptError } from './interpreter';
 export { createClock, formatTicks } from './clock';
 export type { Clock } from './clock';

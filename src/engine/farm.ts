@@ -1,6 +1,7 @@
 import { DECITICKS_PER_TICK, formatTicks } from './clock';
 import { createEnvironment } from './commands';
 import { hashString } from './hash';
+import { ITEMS } from './items';
 import { interpret, parseScript } from './interpreter';
 import { plantState } from './plants';
 import type { Farm, FarmConfig, FarmState } from './types';
@@ -35,8 +36,7 @@ export function createFarm(config: FarmConfig): Farm {
           clock.deciticks,
           world.drone.x,
           world.drone.y,
-          world.stock.hay,
-          world.stock.wheat,
+          ITEMS.map((item) => world.stock[item]),
           world.cells.map((c) => [c.terrain, c.plant?.species ?? null, c.plant?.plantedAt ?? null]),
         ]),
       ),

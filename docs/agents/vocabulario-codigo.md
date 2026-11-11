@@ -18,6 +18,8 @@ Identificadores e comentários do código ficam em **inglês**. Documentação, 
 | Sensor (comando que só lê) | `sensor` |
 | Item | `Item` (`hay`, `wheat`) |
 | Estoque | `Stock` |
+| Planta plantada | `PlantState` (visto de fora) e `PlantedPlant` (guardado no mundo) |
+| Recusa | evento `rejected`, com `RejectReason` |
 | Estágio de crescimento | `GrowthStage` (`sprout`, `growing`, `ready`) |
 | Ação | `Action` |
 | Medidor de execução | `Meter` |

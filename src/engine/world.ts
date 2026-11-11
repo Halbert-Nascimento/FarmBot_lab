@@ -1,5 +1,6 @@
 import { createClock } from './clock';
 import type { Clock } from './clock';
+import { ITEMS } from './items';
 import type { PlantedPlant } from './plants';
 import { createRng } from './rng';
 import type { Rng } from './rng';
@@ -36,7 +37,7 @@ export function createWorld(config: FarmConfig): World {
     rng: createRng(config.seed),
     cells: Array.from({ length: config.width * config.height }, () => ({ terrain: 'grass', plant: null })),
     drone: { x: 0, y: 0 },
-    stock: { hay: 0, wheat: 0 },
+    stock: Object.fromEntries(ITEMS.map((item) => [item, 0])) as Record<Item, number>,
     cellAtDrone: () => world.cells[world.drone.y * config.width + world.drone.x],
     isInside: (p) => p.x >= 0 && p.x < config.width && p.y >= 0 && p.y < config.height,
     emit(event) {

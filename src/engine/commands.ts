@@ -1,5 +1,6 @@
 import { DECITICKS_PER_TICK } from './clock';
 import type { Action, Command, Environment } from './interpreter';
+import { isItem } from './items';
 import { PLANTS, plantState } from './plants';
 import type { Item, PlantSpecies, Position, RejectReason } from './types';
 import type { World } from './world';
@@ -7,7 +8,6 @@ import type { World } from './world';
 /** Command costs in deciticks (GDD 5.2, ADR 0002). */
 const COST = { move: 80, plant: 60, harvest: 60, till: 40, sensor: 10 } as const;
 
-const ITEMS: readonly Item[] = ['hay', 'wheat'];
 
 const PLANT_SPECIES = Object.keys(PLANTS) as PlantSpecies[];
 
@@ -22,14 +22,14 @@ function isDirection(value: unknown): value is Position {
   return Object.values(DIRECTIONS).some((direction) => direction === value);
 }
 
-function isItem(value: unknown): value is Item {
-  return ITEMS.some((item) => item === value);
+function expectNoArguments(name: string, args: readonly unknown[]): void {
+  if (args.length !== 0) throw new Error(`${name} takes no arguments`);
 }
 
 /** A sensor reads the world without changing it. It costs one tick and takes no arguments. */
 function sensor(name: string, read: (startedAt: number) => unknown): Command {
   return (args) => {
-    if (args.length !== 0) throw new Error(`${name} takes no arguments`);
+    expectNoArguments(name, args);
     return { deciticks: COST.sensor, apply: read };
   };
 }
@@ -64,7 +64,7 @@ export function createEnvironment(world: World): Environment {
         };
       },
       harvest: (args): Action => {
-        if (args.length !== 0) throw new Error('harvest takes no arguments');
+        expectNoArguments('harvest', args);
         return {
           deciticks: COST.harvest,
           apply(startedAt) {
@@ -105,7 +105,7 @@ export function createEnvironment(world: World): Environment {
         return { deciticks: COST.sensor, apply: () => world.stock[item] };
       },
       till: (args): Action => {
-        if (args.length !== 0) throw new Error('till takes no arguments');
+        expectNoArguments('till', args);
         return {
           deciticks: COST.till,
           apply() {
