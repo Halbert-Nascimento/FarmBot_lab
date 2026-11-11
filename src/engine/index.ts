@@ -11,6 +11,7 @@ export type {
   PlantSpecies,
   PlantState,
   Position,
+  RejectReason,
   Run,
   Stock,
   Terrain,

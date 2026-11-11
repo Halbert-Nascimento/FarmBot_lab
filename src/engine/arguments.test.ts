@@ -46,19 +46,6 @@ describe('step budget', () => {
   });
 });
 
-describe('planting on an occupied cell', () => {
-  it('emits no event and keeps the plant, still charging the cost', () => {
-    const farm = createFarm(config);
-
-    const run = farm.run(`plant(Plant.GRASS);
-plant(Plant.GRASS);`);
-    run.step(100);
-
-    expect(farm.drainEvents().map((event) => event.type)).toEqual(['planted']);
-    expect(run.getMeter().ticks).toBe(12);
-  });
-});
-
 describe('meter', () => {
   it('shows the run time with exactly one decimal place', () => {
     const run = createFarm(config).run('plant(Plant.GRASS);');

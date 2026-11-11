@@ -1,13 +1,13 @@
 import { DECITICKS_PER_TICK } from './clock';
 import type { Action, Environment } from './interpreter';
 import { PLANTS, plantState } from './plants';
-import type { PlantSpecies, Position } from './types';
+import type { Item, PlantSpecies, Position, RejectReason } from './types';
 import type { World } from './world';
 
 /** Command costs in deciticks (GDD 5.2, ADR 0002). */
-const COST = { move: 80, plant: 60, harvest: 60 } as const;
+const COST = { move: 80, plant: 60, harvest: 60, till: 40 } as const;
 
-const PLANT_SPECIES: readonly PlantSpecies[] = ['grass'];
+const PLANT_SPECIES = Object.keys(PLANTS) as PlantSpecies[];
 
 const DIRECTIONS = {
   NORTH: { x: 0, y: -1 },
@@ -26,7 +26,7 @@ function isPlantSpecies(value: unknown): value is PlantSpecies {
 
 export function createEnvironment(world: World): Environment {
   return {
-    constants: { Plant: { GRASS: 'grass' }, Dir: DIRECTIONS },
+    constants: { Plant: { GRASS: 'grass', WHEAT: 'wheat' }, Dir: DIRECTIONS },
     commands: {
       move: (args): Action => {
         const [direction] = args;
@@ -65,6 +65,22 @@ export function createEnvironment(world: World): Environment {
           },
         };
       },
+      till: (args): Action => {
+        if (args.length !== 0) throw new Error('till takes no arguments');
+        return {
+          deciticks: COST.till,
+          apply() {
+            const cell = world.cellAtDrone();
+            if (!cell) return;
+            if (cell.plant !== null) {
+              world.emit({ type: 'rejected', at: world.drone, action: 'till', reason: 'occupied' });
+              return;
+            }
+            cell.terrain = cell.terrain === 'grass' ? 'tilled' : 'grass';
+            world.emit({ type: 'tilled', at: world.drone, terrain: cell.terrain });
+          },
+        };
+      },
       wait: (args): Action => {
         const [ticks] = args;
         if (args.length !== 1 || typeof ticks !== 'number' || !Number.isInteger(ticks) || ticks < 0) {
@@ -79,10 +95,17 @@ export function createEnvironment(world: World): Environment {
           deciticks: COST.plant,
           apply() {
             const cell = world.cellAtDrone();
-            if (cell && cell.plant === null) {
-              cell.plant = { species, plantedAt: world.clock.deciticks };
-              world.emit({ type: 'planted', at: world.drone, species });
-            }
+            if (!cell) return;
+            const { terrain, cost } = PLANTS[species];
+            const reject = (reason: RejectReason) =>
+              world.emit({ type: 'rejected', at: world.drone, action: 'plant', reason });
+            if (cell.plant !== null) return reject('occupied');
+            if (terrain !== null && cell.terrain !== terrain) return reject('needs-tilled-terrain');
+            const lacksStock = Object.entries(cost).some(([item, quantity]) => world.stock[item as Item] < quantity);
+            if (lacksStock) return reject('not-enough-hay');
+            for (const [item, quantity] of Object.entries(cost)) world.stock[item as Item] -= quantity;
+            cell.plant = { species, plantedAt: world.clock.deciticks };
+            world.emit({ type: 'planted', at: world.drone, species });
           },
         };
       },

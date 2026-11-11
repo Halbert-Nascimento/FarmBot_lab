@@ -1,15 +1,25 @@
 import { DECITICKS_PER_TICK } from './clock';
-import type { Item, PlantSpecies, PlantState } from './types';
+import type { Item, PlantSpecies, PlantState, Terrain } from './types';
 
 interface PlantSpec {
   /** Time to ripen, in deciticks (GDD 7.2). */
   readonly growthDeciticks: number;
   /** What a ripe harvest rewards. */
   readonly yield: { readonly item: Item; readonly quantity: number };
+  /** The terrain it needs, or `null` when it grows anywhere. */
+  readonly terrain: Terrain | null;
+  /** What planting it consumes from the stock. */
+  readonly cost: Readonly<Partial<Record<Item, number>>>;
 }
 
 export const PLANTS: Readonly<Record<PlantSpecies, PlantSpec>> = {
-  grass: { growthDeciticks: 120 * DECITICKS_PER_TICK, yield: { item: 'hay', quantity: 1 } },
+  grass: { growthDeciticks: 120 * DECITICKS_PER_TICK, yield: { item: 'hay', quantity: 1 }, terrain: null, cost: {} },
+  wheat: {
+    growthDeciticks: 160 * DECITICKS_PER_TICK,
+    yield: { item: 'wheat', quantity: 1 },
+    terrain: 'tilled',
+    cost: { hay: 2 },
+  },
 };
 
 /** A plant as the world stores it: what it is and when it was planted. */

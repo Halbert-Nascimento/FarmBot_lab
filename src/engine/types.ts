@@ -1,5 +1,5 @@
 export type Terrain = 'grass' | 'tilled';
-export type PlantSpecies = 'grass';
+export type PlantSpecies = 'grass' | 'wheat';
 export type Item = 'hay' | 'wheat';
 export type GrowthStage = 'sprout' | 'growing' | 'ready';
 
@@ -39,6 +39,9 @@ export interface FarmState {
   };
 }
 
+/** Why an action had no effect. The action still spent its ticks. */
+export type RejectReason = 'occupied' | 'needs-tilled-terrain' | 'not-enough-hay';
+
 /** A change of farm state, stamped with the exact time (in deciticks) at which the action completed. */
 export type FarmEvent =
   | { readonly type: 'planted'; readonly timeDeciticks: number; readonly at: Position; readonly species: PlantSpecies }
@@ -51,6 +54,14 @@ export type FarmEvent =
       readonly quantity: number;
     }
   | { readonly type: 'destroyed'; readonly timeDeciticks: number; readonly at: Position; readonly species: PlantSpecies }
+  | { readonly type: 'tilled'; readonly timeDeciticks: number; readonly at: Position; readonly terrain: Terrain }
+  | {
+      readonly type: 'rejected';
+      readonly timeDeciticks: number;
+      readonly at: Position;
+      readonly action: 'plant' | 'till';
+      readonly reason: RejectReason;
+    }
   | { readonly type: 'moved'; readonly timeDeciticks: number; readonly from: Position; readonly to: Position }
   | { readonly type: 'bumped'; readonly timeDeciticks: number; readonly at: Position };
 
