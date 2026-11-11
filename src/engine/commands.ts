@@ -1,11 +1,13 @@
 import { DECITICKS_PER_TICK } from './clock';
-import type { Action, Environment } from './interpreter';
+import type { Action, Command, Environment } from './interpreter';
 import { PLANTS, plantState } from './plants';
 import type { Item, PlantSpecies, Position, RejectReason } from './types';
 import type { World } from './world';
 
 /** Command costs in deciticks (GDD 5.2, ADR 0002). */
-const COST = { move: 80, plant: 60, harvest: 60, till: 40 } as const;
+const COST = { move: 80, plant: 60, harvest: 60, till: 40, sensor: 10 } as const;
+
+const ITEMS: readonly Item[] = ['hay', 'wheat'];
 
 const PLANT_SPECIES = Object.keys(PLANTS) as PlantSpecies[];
 
@@ -20,13 +22,30 @@ function isDirection(value: unknown): value is Position {
   return Object.values(DIRECTIONS).some((direction) => direction === value);
 }
 
+function isItem(value: unknown): value is Item {
+  return ITEMS.some((item) => item === value);
+}
+
+/** A sensor reads the world without changing it. It costs one tick and takes no arguments. */
+function sensor(name: string, read: (startedAt: number) => unknown): Command {
+  return (args) => {
+    if (args.length !== 0) throw new Error(`${name} takes no arguments`);
+    return { deciticks: COST.sensor, apply: read };
+  };
+}
+
 function isPlantSpecies(value: unknown): value is PlantSpecies {
   return PLANT_SPECIES.some((species) => species === value);
 }
 
 export function createEnvironment(world: World): Environment {
   return {
-    constants: { Plant: { GRASS: 'grass', WHEAT: 'wheat' }, Dir: DIRECTIONS },
+    constants: {
+      Plant: { GRASS: 'grass', WHEAT: 'wheat' },
+      Dir: DIRECTIONS,
+      Terrain: { GRASS: 'grass', TILLED: 'tilled' },
+      Item: { HAY: 'hay', WHEAT: 'wheat' },
+    },
     commands: {
       move: (args): Action => {
         const [direction] = args;
@@ -64,6 +83,25 @@ export function createEnvironment(world: World): Environment {
             }
           },
         };
+      },
+      log: (args): Action => ({
+        deciticks: 0,
+        apply() {
+          world.emit({ type: 'logged', values: structuredClone(args) });
+        },
+      }),
+      getPos: sensor('getPos', () => ({ ...world.drone })),
+      getSize: sensor('getSize', () => ({ width: world.config.width, height: world.config.height })),
+      getPlant: sensor('getPlant', () => world.cellAtDrone()?.plant?.species ?? null),
+      isReady: sensor('isReady', (startedAt) => {
+        const plant = world.cellAtDrone()?.plant;
+        return plant ? plantState(plant, startedAt).stage === 'ready' : false;
+      }),
+      getTerrain: sensor('getTerrain', () => world.cellAtDrone()?.terrain),
+      getStock: (args): Action => {
+        const [item] = args;
+        if (args.length !== 1 || !isItem(item)) throw new Error('getStock expects an item');
+        return { deciticks: COST.sensor, apply: () => world.stock[item] };
       },
       till: (args): Action => {
         if (args.length !== 0) throw new Error('till takes no arguments');

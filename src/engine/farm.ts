@@ -45,6 +45,7 @@ export function createFarm(config: FarmConfig): Farm {
       const script = interpret(parseScript(source), env);
       const startedAt = clock.deciticks;
       let finished = false;
+      let lastResult: unknown;
       return {
         get isFinished() {
           return finished;
@@ -56,14 +57,14 @@ export function createFarm(config: FarmConfig): Farm {
           const limit = clock.deciticks + ticks * DECITICKS_PER_TICK;
           try {
             while (!finished && clock.deciticks < limit) {
-              const next = script.next();
+              const next = script.next(lastResult);
               if (next.done) {
                 finished = true;
                 break;
               }
               const startedAt = clock.deciticks;
               clock.charge(next.value.deciticks);
-              next.value.apply(startedAt);
+              lastResult = next.value.apply(startedAt);
             }
           } catch (error) {
             finished = true;

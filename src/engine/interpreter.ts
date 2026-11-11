@@ -8,8 +8,9 @@ export interface Action {
   /**
    * Applies the effect once the cost has been charged. `startedAt` is the world time (in
    * deciticks) when the action began: actions act on the world as it was at that moment.
+   * What it returns is the value of the command call in the script.
    */
-  apply(startedAt: number): void;
+  apply(startedAt: number): unknown;
 }
 
 export type Command = (args: readonly unknown[]) => Action;
@@ -46,8 +47,8 @@ export function parseScript(source: string): Program {
  * Interprets a script as a coroutine: it yields every timed action and can be
  * paused between two of them, which is what makes `step(n)` possible.
  */
-export function* interpret(program: Program, env: Environment): Generator<Action, void, void> {
-  function* evaluate(node: Expression): Generator<Action, unknown, void> {
+export function* interpret(program: Program, env: Environment): Generator<Action, void, unknown> {
+  function* evaluate(node: Expression): Generator<Action, unknown, unknown> {
     switch (node.type) {
       case 'Literal':
         return node.value;
@@ -65,7 +66,7 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     }
   }
 
-  function* call(node: CallExpression): Generator<Action, unknown, void> {
+  function* call(node: CallExpression): Generator<Action, unknown, unknown> {
     if (node.callee.type !== 'Identifier') {
       throw new ScriptError('Unsupported call', lineOf(node));
     }
@@ -83,8 +84,7 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     } catch (error) {
       throw new ScriptError((error as Error).message, lineOf(node));
     }
-    yield action;
-    return undefined;
+    return yield action;
   }
 
   for (const statement of program.body) {

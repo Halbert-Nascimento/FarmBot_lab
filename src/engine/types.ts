@@ -62,6 +62,7 @@ export type FarmEvent =
       readonly action: 'plant' | 'till';
       readonly reason: RejectReason;
     }
+  | { readonly type: 'logged'; readonly timeDeciticks: number; readonly values: readonly unknown[] }
   | { readonly type: 'moved'; readonly timeDeciticks: number; readonly from: Position; readonly to: Position }
   | { readonly type: 'bumped'; readonly timeDeciticks: number; readonly at: Position };
 
