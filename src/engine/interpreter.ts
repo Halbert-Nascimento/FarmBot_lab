@@ -15,7 +15,7 @@ import type {
 } from 'acorn';
 import { ASSIGNMENT_COST, CALL_COST, OPERATION_COST } from './costs';
 import type { Limits } from './limits';
-import { ALL_COMMAND_NAMES } from './names';
+import type { ErrorCode } from './messages';
 import { BINARY, UNARY } from './operators';
 import { Scope } from './scope';
 import type { Binding } from './scope';
@@ -64,7 +64,12 @@ function lineOf(node: Node): number {
 }
 
 /** How the parser starts its messages for the mistakes the game has its own words for. */
-const SYNTAX_ERRORS: readonly (readonly [string, string])[] = [
+const SYNTAX_ERRORS: readonly (readonly [string, ErrorCode])[] = [
+  ["'return' outside", 'syntaxReturnOutside'],
+  ['Assigning to rvalue', 'syntaxInvalidAssignment'],
+  ['Unexpected keyword', 'syntaxReservedWord'],
+  ['The keyword', 'syntaxReservedWord'],
+  ['Unexpected reserved word', 'syntaxReservedWord'],
   ['Unexpected token', 'syntaxUnexpectedToken'],
   ['Unterminated string constant', 'syntaxUnterminatedString'],
   ['Unterminated template', 'syntaxUnterminatedTemplate'],
@@ -160,9 +165,15 @@ export function* interpret(
     if (pendingDeciticks > 0) yield* yieldComputation(node);
   }
 
-  /** The names the player may have meant when they wrote one that does not exist. */
-  function nameCandidates(scope: Scope): string[] {
-    return [...scope.names(), ...Object.keys(env.commands), ...Object.keys(env.constants), ...Object.keys(GLOBALS)];
+  /** A name that stands for a value but does not exist: what the player may have meant is a variable, a group of constants or a global. */
+  function notDefined(name: string, scope: Scope, node: Node): ScriptError {
+    const candidates = [...scope.names(), ...Object.keys(env.constants), ...Object.keys(GLOBALS)];
+    return new ScriptError('notDefined', lineOf(node), { name, guess: name, candidates });
+  }
+
+  /** Every constant under its full name, in both languages: Dir.NORTH, Planta.CAPIM... */
+  function constantNames(): string[] {
+    return Object.entries(env.constants).flatMap(([group, constants]) => Object.keys(constants).map((key) => `${group}.${key}`));
   }
 
   function unsupported(node: Node, what: string = node.type): never {
@@ -172,7 +183,7 @@ export function* interpret(
 
   function lookup(name: string, scope: Scope, node: Node): Binding {
     const binding = scope.find(name);
-    if (!binding) throw new ScriptError('notDefined', lineOf(node), { name, guess: name, candidates: nameCandidates(scope) });
+    if (!binding) throw notDefined(name, scope, node);
     if (!binding.initialized) throw new ScriptError('beforeInit', lineOf(node), { name });
     return binding;
   }
@@ -278,7 +289,11 @@ export function* interpret(
       case 'Identifier':
         if (scope.find(node.name)) return lookup(node.name, scope, node).value;
         if (node.name in GLOBALS) return GLOBALS[node.name];
-        throw new ScriptError('notDefined', lineOf(node), { name: node.name, guess: node.name, candidates: nameCandidates(scope) });
+        if (node.name in env.constants) {
+          const [first = ''] = Object.keys(env.constants[node.name] ?? {});
+          throw new ScriptError('constantGroup', lineOf(node), { name: node.name, example: `${node.name}.${first}` });
+        }
+        throw notDefined(node.name, scope, node);
       case 'MemberExpression': {
         if (node.object.type === 'Identifier' && !node.computed && !scope.find(node.object.name)) {
           const group = env.constants[node.object.name];
@@ -288,8 +303,8 @@ export function* interpret(
             throw new ScriptError('unknownValue', lineOf(node), {
               group: node.object.name,
               name,
-              guess: name,
-              candidates: Object.keys(group),
+              guess: `${node.object.name}.${name}`,
+              candidates: constantNames(),
             });
           }
         }
@@ -398,7 +413,7 @@ export function* interpret(
         command = env.commands[callee.name];
         if (!command) {
           const guess = callee.name;
-          throw new ScriptError('unknownCommand', lineOf(node), { name: guess, guess, candidates: [...nameCandidates(scope), ...ALL_COMMAND_NAMES] });
+          throw new ScriptError('unknownCommand', lineOf(node), { name: guess, guess, candidates: [...scope.names(), ...Object.keys(env.commands)] });
         }
       }
     } else if (callee.type === 'MemberExpression') {

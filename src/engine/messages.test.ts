@@ -91,7 +91,11 @@ const CASES: Record<string, { source: string; limits?: Partial<Limits>; pt: RegE
   syntaxUnterminatedTemplate: { source: 'log(`abc);', pt: /Linha 1: Template string sem crase de fechamento/ },
   syntaxAlreadyDeclared: { source: 'let a = 1;\nlet a = 2;', pt: /Linha 2: O nome 'a' já foi declarado/ },
   syntaxUnexpectedChar: { source: 'log(1) @', pt: /Linha 1: Caractere inesperado/ },
-  syntaxGeneric: { source: 'return 1;', pt: /Linha 1: / },
+  syntaxReturnOutside: { source: 'return 1;', pt: /Linha 1: 'return' só pode ser usado dentro de uma função/ },
+  syntaxInvalidAssignment: { source: '1 = 2;', pt: /Linha 1: Não é possível atribuir a isto/ },
+  syntaxReservedWord: { source: 'let if = 1;', pt: /Linha 1: Esta palavra é reservada do JavaScript/ },
+  syntaxGeneric: { source: 'break;', pt: /Linha 1: Erro de sintaxe: / },
+  constantGroup: { source: 'log(Dir);', pt: /Linha 1: Dir é um grupo de constantes, não um valor/ },
   moveExpectsDirection: { source: 'move(5);', pt: /Linha 1: move espera uma direção/ },
   plantExpectsSpecies: { source: 'plantar();', pt: /Linha 1: plantar espera uma espécie de planta/ },
   getStockExpectsItem: { source: 'estoque();', pt: /Linha 1: estoque espera um item/ },
@@ -124,6 +128,17 @@ describe('script errors', () => {
     expect(portuguese.message).toMatch(/^Linha \d+: .+ Dica: .+/s);
     expect(portuguese.message).toMatch(pt);
     expect(portuguese.message).not.toBe(english.message);
+  });
+
+  it('never leave English words in a translated syntax error the game knows', () => {
+    for (const source of ['return 1;', '1 = 2;', 'let if = 1;', 'log(1;', 'log("a);']) {
+      expect(fail(source, 'pt-BR').message, source).not.toMatch(/outside of function|rvalue|keyword|Unexpected|Unterminated/);
+    }
+  });
+
+  it('give a tip that does not depend on the name the player typed for the command', () => {
+    expect(fail('esperar(-1);', 'en').hint).not.toMatch(/esperar/);
+    expect(fail('move(5);', 'pt-BR').hint).not.toMatch(/move\(/);
   });
 
   it('are in English when no language is chosen', () => {

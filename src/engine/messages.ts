@@ -4,6 +4,9 @@ import { suggest } from './suggest';
 
 export type Language = 'en' | 'pt-BR';
 
+/** Every error the engine can raise, named by the keys of the translation files (error.notDefined -> notDefined). */
+export type ErrorCode = { [Key in keyof typeof en]: Key extends `error.${infer Code}` ? Code : never }[keyof typeof en];
+
 export const LANGUAGES: readonly Language[] = ['en', 'pt-BR'];
 
 export const DEFAULT_LANGUAGE: Language = 'en';
@@ -41,7 +44,7 @@ export interface RenderedError {
 const ENDS_A_SENTENCE = /[.?!)]$/;
 
 /** Writes an error in a language: where it was, what went wrong, a "did you mean", and what to try. */
-export function renderError(language: Language, code: string, line: number, params: MessageParams): RenderedError {
+export function renderError(language: Language, code: ErrorCode, line: number, params: MessageParams): RenderedError {
   const values: Record<string, unknown> = { ...params };
   if (typeof params['whatKey'] === 'string') values['what'] = text(language, `what.${params['whatKey']}`);
   const reason = fill(text(language, `error.${code}`), values);

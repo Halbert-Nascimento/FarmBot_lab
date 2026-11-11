@@ -44,8 +44,8 @@ function checkKey(key: string, line: number): void {
 }
 
 export function tooBig(what: 'list' | 'object' | 'text', line: number): ScriptError {
-  const code = { list: 'listTooBig', object: 'objectTooBig', text: 'textTooLong' }[what];
-  return new ScriptError(code, line);
+  const code = { list: 'listTooBig', object: 'objectTooBig', text: 'textTooLong' } as const;
+  return new ScriptError(code[what], line);
 }
 
 /** Returns the text if it fits in `maxLength` characters, and refuses it if it does not. */

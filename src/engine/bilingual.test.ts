@@ -126,7 +126,31 @@ describe('an unknown name suggests a similar one', () => {
   });
 
   it('suggests the constant that was meant', () => {
-    expect((failure('log(Dir.NORT);') as Error).message).toMatch(/Line 1: Unknown value: Dir\.NORT.*Did you mean NORTH\?/);
+    expect((failure('log(Dir.NORT);') as Error).message).toMatch(/Line 1: Unknown value: Dir\.NORT.*Did you mean Dir\.NORTH\?/);
+  });
+
+  it.each([
+    ['Plant.CAPIM', 'Planta.CAPIM'],
+    ['Planta.GRASS', 'Plant.GRASS'],
+    ['Terreno.GRASS', 'Terreno.GRAMA'],
+    ['Dir.North', 'Dir.NORTH'],
+  ])('suggests the constant of the other language when they are mixed up: %s', (typed, suggestion) => {
+    const error = failure(`log(${typed});`) as ScriptError;
+
+    expect(error.code).toBe('unknownValue');
+    expect(error.didYouMean).toBe(suggestion);
+  });
+
+  it('does not offer a group of constants where a command was meant, nor a command where a value was meant', () => {
+    expect((failure('Dr();') as ScriptError).didYouMean).toBeUndefined();
+    expect((failure('const speed = 1;\nlog(sped, Dir);') as ScriptError).didYouMean).toBe('speed');
+  });
+
+  it('explains that a group of constants is not a value, with an example', () => {
+    const error = failure('move(Dir);') as ScriptError;
+
+    expect(error.code).toBe('constantGroup');
+    expect(error.hint).toMatch(/Dir\.NORTH/);
   });
 
   it('suggests nothing when nothing is close', () => {

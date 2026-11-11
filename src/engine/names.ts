@@ -65,8 +65,6 @@ export function buildConstantGroups(): Record<string, Record<string, unknown>> {
 /** Every name the player can write that is Portuguese: used to suggest names in the language of the messages. */
 export const PORTUGUESE_NAMES: ReadonlySet<string> = new Set([
   ...Object.values(COMMAND_NAMES),
-  ...CONSTANT_PAIRS.flatMap(({ portuguese }) => portuguese.split('.')),
+  ...CONSTANT_PAIRS.flatMap(({ portuguese }) => [portuguese, ...portuguese.split('.')]),
 ]);
 
-/** Every name the player can write for a command, in both languages. */
-export const ALL_COMMAND_NAMES: readonly string[] = [...Object.keys(COMMAND_NAMES), ...Object.values(COMMAND_NAMES)];

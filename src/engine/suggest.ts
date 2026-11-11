@@ -17,14 +17,15 @@ function distance(a: string, b: string): number {
 
 /**
  * The name, among `candidates`, that the player most likely meant by `name`: at most 2 edits away
- * (1 for very short names). When two are equally close, the one in the language of the messages wins.
+ * (1 for very short names), ignoring capital letters. When two are equally close, the one in the language of the messages wins.
  */
 export function suggest(name: string, candidates: readonly string[], language: Language): string | undefined {
   const limit = name.length <= 3 ? 1 : 2;
   let best: { candidate: string; edits: number; preferred: boolean } | undefined;
   for (const candidate of new Set(candidates)) {
     if (candidate === name) continue;
-    const edits = distance(name, candidate);
+    // Capital letters do not count as a difference: Dir.North is plainly Dir.NORTH.
+    const edits = distance(name.toLowerCase(), candidate.toLowerCase());
     if (edits > limit) continue;
     const preferred = PORTUGUESE_NAMES.has(candidate) === (language === 'pt-BR');
     if (!best || edits < best.edits || (edits === best.edits && preferred && !best.preferred)) {

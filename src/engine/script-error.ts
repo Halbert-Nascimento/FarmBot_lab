@@ -1,5 +1,5 @@
 import { DEFAULT_LANGUAGE, renderError } from './messages';
-import type { Language, MessageParams } from './messages';
+import type { ErrorCode, Language, MessageParams } from './messages';
 
 /**
  * A mistake in the player's script: the line it was found at, what went wrong (`reason`),
@@ -12,7 +12,7 @@ export class ScriptError extends Error {
   readonly didYouMean: string | undefined;
 
   constructor(
-    readonly code: string,
+    readonly code: ErrorCode,
     readonly line: number,
     readonly params: MessageParams = {},
     readonly language: Language = DEFAULT_LANGUAGE,
@@ -33,7 +33,7 @@ export class ScriptError extends Error {
 
 /** A command refusing its arguments. The interpreter adds the line and the name the player used. */
 export class CommandError extends Error {
-  constructor(readonly code: string) {
+  constructor(readonly code: ErrorCode) {
     super(code);
     this.name = 'CommandError';
   }
