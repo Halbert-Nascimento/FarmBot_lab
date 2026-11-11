@@ -125,6 +125,14 @@ describe('the events', () => {
     for (const stamp of stamps) expect(Number.isInteger(stamp)).toBe(true);
   });
 
+  it('are stamped in deciticks, so a tenth of a tick is not lost', () => {
+    const farm = createFarm({ width: 4, height: 4, seed: 7 });
+    // One assignment costs a tenth of a tick, then the move takes 8 ticks: it ends at 8.1 ticks = 81 deciticks.
+    farm.run('let x = 1;\nmove(Dir.EAST);').step(100);
+
+    expect(farm.drainEvents()).toEqual([expect.objectContaining({ type: 'moved', timeDeciticks: 81 })]);
+  });
+
   it('never carry a time after the end of the simulation', () => {
     const { deciticks } = play(WANDER, { totalTicks: TOTAL, ticksPerFrame: 16 });
 
