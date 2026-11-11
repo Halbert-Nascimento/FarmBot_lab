@@ -104,14 +104,63 @@ describe('speed only changes how often the view asks, never what happens', () =>
     });
   }
 
-  it('takes the very same amount of time to be asked for in one step or in a thousand', () => {
+  it('takes exactly the time that was asked for, in one step or in a thousand', () => {
     const farm = createFarm({ width: 4, height: 4, seed: 7 });
     const run = farm.run('while (true) {\n  move(Dir.EAST);\n}');
     for (let frame = 0; frame < 800; frame++) run.step(1);
 
-    // Each move costs 8 ticks: 800 ticks asked for are about 100 moves, not 800.
-    expect(run.getMeter().ticks).toBeGreaterThanOrEqual(800);
-    expect(run.getMeter().ticks).toBeLessThan(808);
+    expect(run.getMeter().ticks).toBe(800);
+  });
+});
+
+describe('the clock never runs ahead of what was asked for', () => {
+  it('stops exactly where the steps add up to, even in the middle of an action', () => {
+    const farm = createFarm({ width: 4, height: 4, seed: 7 });
+    const run = farm.run('while (true) {\n  move(Dir.EAST);\n}');
+
+    for (const asked of [1, 3, 5, 7, 11]) {
+      const before = run.getMeter().ticks;
+      run.step(asked);
+      expect(run.getMeter().ticks).toBe(before + asked);
+    }
+  });
+
+  it('applies the effect of an action only once its whole cost has been paid', () => {
+    const farm = createFarm({ width: 4, height: 4, seed: 7 });
+    const run = farm.run('plant(Plant.GRASS);');
+
+    run.step(5);
+    expect(farm.getState().field.cells[0]?.plant).toBeNull();
+    expect(farm.drainEvents()).toEqual([]);
+
+    run.step(1);
+    expect(farm.getState().field.cells[0]?.plant).not.toBeNull();
+    expect(farm.drainEvents()).toEqual([expect.objectContaining({ type: 'planted', timeDeciticks: 60 })]);
+  });
+
+  it('lets a long wait pass little by little, so what grows meanwhile can be seen growing', () => {
+    const farm = createFarm({ width: 1, height: 1, seed: 7 });
+    const run = farm.run('plant(Plant.GRASS);\nwait(500);');
+    const stages: string[] = [];
+    for (let tick = 0; tick < 200; tick++) {
+      run.step(1);
+      const stage = farm.getState().field.cells[0]?.plant?.stage;
+      if (stage && stages.at(-1) !== stage) stages.push(stage);
+    }
+
+    expect(stages).toEqual(['sprout', 'growing', 'ready']);
+    expect(run.isFinished).toBe(false);
+  });
+
+  it('keeps an action that was cut by the budget going where it stopped', () => {
+    const cut = createFarm({ width: 4, height: 4, seed: 7 });
+    const whole = createFarm({ width: 4, height: 4, seed: 7 });
+    const source = 'move(Dir.EAST);\nplant(Plant.GRASS);\nwait(30);\nmove(Dir.SOUTH);';
+    const run = cut.run(source);
+    for (let i = 0; i < 100; i++) run.step(1);
+    whole.run(source).step(100);
+
+    expect(cut.getStateHash()).toBe(whole.getStateHash());
   });
 });
 

@@ -41,4 +41,13 @@ describe('engine/view boundary', () => {
 
     expect(messages).toEqual([]);
   });
+
+  it.each([
+    ['a file inside the engine', "import { createWorld } from '../engine/world';\ncreateWorld();\n"],
+    ['a type inside the engine', "import type { World } from '../engine/world';\nexport type Alias = World;\n"],
+  ])('rejects a view file that imports %s, since the view reads only the public interface', async (_label, code) => {
+    const messages = await lint(code, 'src/view/main.ts');
+
+    expect(messages.some((m) => m.ruleId === 'no-restricted-imports')).toBe(true);
+  });
 });

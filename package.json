@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "capture": "node scripts/capture.mjs",
     "bench": "vitest run src/engine/performance.test.ts --disable-console-intercept"
   },
   "dependencies": {
@@ -22,6 +23,7 @@
     "@eslint/js": "^10.0.1",
     "@types/three": "^0.187.0",
     "eslint": "^10.14.0",
+    "playwright-core": "^1.65.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.2",
     "vite": "^8.3.8",

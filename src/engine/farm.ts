@@ -3,6 +3,7 @@ import { createEnvironment } from './commands';
 import { hashString } from './hash';
 import { ITEMS } from './items';
 import { interpret, parseScript } from './interpreter';
+import type { Action } from './interpreter';
 import { checkLayer, LAYER_COUNT } from './layers';
 import { DEFAULT_LANGUAGE, isLanguage } from './messages';
 import type { Language } from './messages';
@@ -76,12 +77,14 @@ export function createFarm(config: FarmConfig): Farm {
       const script = interpret(program, env, limits);
       const startedAt = clock.deciticks;
       /**
-       * Where the clock must get to, given every tick the view has asked for so far. An action is
-       * never cut in half, so the clock may end up a little past it; the next steps then start from
-       * the target, not from the clock. That is what makes the result the same however the view
-       * slices its steps (1x, 16x or all at once).
+       * Where the clock must get to, given every tick the view has asked for so far. The clock stops
+       * exactly there: an action whose cost does not fit in what was asked for keeps going in the next
+       * step, and its effect is applied only once its whole cost has been paid. That is what makes the
+       * result the same however the view slices its steps (1x, 16x or all at once), and what keeps the
+       * world from running ahead of what the view shows.
        */
       let target = startedAt;
+      let inFlight: { action: Action; remaining: number; startedAt: number } | undefined;
       let finished = false;
       let lastResult: unknown;
       const guard = createProgressGuard(limits);
@@ -96,15 +99,22 @@ export function createFarm(config: FarmConfig): Farm {
           target += ticks * DECITICKS_PER_TICK;
           try {
             while (!finished && clock.deciticks < target) {
-              const next = script.next(lastResult);
-              if (next.done) {
-                finished = true;
-                break;
+              if (!inFlight) {
+                const next = script.next(lastResult);
+                if (next.done) {
+                  finished = true;
+                  break;
+                }
+                inFlight = { action: next.value, remaining: next.value.deciticks, startedAt: clock.deciticks };
               }
-              const startedAt = clock.deciticks;
-              clock.charge(next.value.deciticks);
-              lastResult = next.value.apply(startedAt);
-              guard.observe(next.value);
+              const paid = Math.min(inFlight.remaining, target - clock.deciticks);
+              clock.charge(paid);
+              inFlight.remaining -= paid;
+              if (inFlight.remaining > 0) break;
+              const { action, startedAt } = inFlight;
+              inFlight = undefined;
+              lastResult = action.apply(startedAt);
+              guard.observe(action);
             }
           } catch (error) {
             finished = true;

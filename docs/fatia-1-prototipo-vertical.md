@@ -45,8 +45,8 @@ A pessoa não participou do desenvolvimento, não conhece o jogo, tem familiarid
 
 Pontos pequenos que o GDD não fixava e que o motor adotou. Valem até o balanceamento ou a revisão em um ticket futuro.
 
-- Uma ação é atômica: cobra o custo e aplica o efeito. `step(n)` aceita só inteiros não negativos e pode ultrapassar o orçamento por no máximo uma ação.
-- **A velocidade não muda o resultado.** A execução guarda o total de ticks já pedidos (o alvo) e o relógio anda até alcançá-lo. O que uma ação passou do alvo é descontado dos pedidos seguintes. Por isso pedir 800 ticks de uma vez, em passos de 16 ou em 800 passos de 1 deixa a fazenda no mesmo estado, com os mesmos eventos e os mesmos carimbos de tempo. Antes dessa correção, um `step(1)` por quadro (1×) executava uma ação inteira por quadro e andava 8 vezes mais rápido que o pedido. O teste é `speeds.test.ts`: um consumidor imita a tela em 1×, 16× e instantâneo, lendo os eventos a cada quadro, só no fim ou nunca.
+- Uma ação cobra o custo e só aplica o efeito quando o custo inteiro foi pago. `step(n)` aceita só inteiros não negativos e faz o relógio andar **exatamente** `n` ticks: uma ação que não cabe no que foi pedido continua no passo seguinte, de onde parou (por exemplo, um `wait(500)` passa aos poucos, e as plantas crescem enquanto isso).
+- **A velocidade não muda o resultado.** Pedir 800 ticks de uma vez, em passos de 16 ou em 800 passos de 1 deixa a fazenda no mesmo estado, com os mesmos eventos e os mesmos carimbos de tempo. Dois defeitos foram corrigidos pelo caminho, ambos achados por testes: (1) um `step(1)` por quadro (1×) executava uma ação inteira por quadro e andava 8 vezes mais rápido que o pedido; (2) mesmo depois disso, uma ação comprida (como `wait(500)`) fazia o mundo pular à frente do que a tela mostrava, e as plantas apareciam prontas sem se ver o crescimento. O teste é `speeds.test.ts`: um consumidor imita a tela em 1×, 16× e instantâneo, lendo os eventos a cada quadro, só no fim ou nunca.
 - Uma ação age sobre o mundo **como ele estava no início dela**. Por isso colher uma planta que amadurece durante os 6 ticks da própria colheita ainda a destrói.
 - Bater na borda, plantar em lugar inválido e arar casa ocupada **gastam os ticks** e emitem um aviso (`bumped` ou `rejected`), sem alterar o mundo.
 - O crescimento de uma planta começa quando o plantio **termina** (depois dos 6 ticks). As regras de plantio (casa ocupada, terreno, estoque) são verificadas no fim da ação, o que é equivalente com um só drone e deve ser revisto no marco dos vários drones.
@@ -57,6 +57,17 @@ Pontos pequenos que o GDD não fixava e que o motor adotou. Valem até o balance
 - Eventos são carimbados em décimos de tick (`timeDeciticks`).
 - **Adiado de propósito (fora do #6):** os scripts ainda não veem o estágio de crescimento (o GDD prevê `getProgress` na camada 3), e `plant` e `harvest` não devolvem resultado ao script (o GDD prevê `harvest` devolver `{item, qty}` ou `null`). Entram quando a linguagem tiver variáveis e `if`.
 - **Pendente para a visualização (ticket da cena 3D):** o motor ainda não emite evento de mudança de estágio de crescimento. A visualização hoje precisaria ler o estado para saber o estágio.
+
+## Cena 3D (issue #11)
+
+A visualização é um protótipo descartável em `src/view/`, em Three.js puro. Ela só lê a interface pública do motor (uma regra de lint proíbe importar de dentro de `src/engine/`) e o motor não conhece a visualização.
+
+- **Partes:** `models.ts` (a forma das plantas, gerada por código, sem nenhuma regra), `farm-scene.ts` (o grafo Three.js, sem renderizador: lê o estado e reage aos eventos), `player.ts` (quanto tempo real vira ticks pedidos ao motor) e `main.ts` (a página do navegador). O que está na tela sempre vem do estado do motor (`sync`); os eventos só tocam os efeitos (a planta que brota, a poeira da colheita, o drone que treme ao bater na borda).
+- **Trocar o modelo do trigo** só muda o que se vê: um teste troca o modelo por um cubo e confere que o hash do estado final e o que a cena mostra (espécie e estágio de cada casa) continuam iguais.
+- **A velocidade** (`1`, `16` ou `instant`) é só quantos ticks por segundo a tela pede. Testes e a página real chegam ao mesmo hash nos três ritmos.
+- **Desenho:** um campo de casas em tabuleiro (duas tonalidades), solo arado marrom, plantas em um estágio de cada vez (broto, crescendo, pronta) e um drone com um anel azul no chão sob ele. Cada planta é uma única malha, e as casas são uma malha instanciada.
+- **Câmera:** provisória (perspectiva fixa que enquadra o campo todo). A decisão da câmera é dos tickets #13 e #14. Não há editor nem controles ainda (ticket #12): a página recebe tudo pelo endereço, por exemplo `?w=16&h=16&demo=sweep&speed=16`, e `paused` a deixa parada.
+- **Como rodar:** `pnpm dev` abre a página. Para a validação visual, com `pnpm dev` rodando em outro terminal, `pnpm capture <marco> <pasta>` (marco 1, 2 ou 3) abre a página no Edge, tira capturas e grava o log do console. As capturas e os logs aprovados ficam em `docs/validacao-visual/`. O script usa `playwright-core` e o Edge instalado; não roda no CI.
 
 ## Sintaxe por camada (issue #8)
 

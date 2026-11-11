@@ -153,6 +153,10 @@ _Avoid_: núcleo (minúsculo)
 A parte que implementa as regras do jogo e roda sem interface.
 _Avoid_: engine, backend
 
+**Cena**:
+O desenho 3D da fazenda dentro da visualização: casas, plantas e drone. Segue o estado e os eventos do motor e nunca decide nada sobre a fazenda.
+_Avoid_: mundo (reservado ao estado interno do motor), mapa
+
 **Visualização**:
 A parte que desenha o estado da fazenda. Só lê o estado, nunca o altera.
 _Avoid_: renderizador (reservado ao componente técnico de desenho 3D), front-end

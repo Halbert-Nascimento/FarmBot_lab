@@ -88,12 +88,17 @@ describe('pausing inside loops', () => {
     const farm = createFarm(config);
     const run = farm.run('for (let i = 0; i < 2; i++) {\n  move(Dir.EAST);\n}');
 
+    // Each move takes 8 ticks, plus a little for the loop's own arithmetic: 8 ticks are not enough yet.
     run.step(8);
+
+    expect(farm.getState().drone).toEqual({ x: 0, y: 0 });
+
+    run.step(1);
 
     expect(farm.getState().drone).toEqual({ x: 1, y: 0 });
     expect(run.isFinished).toBe(false);
 
-    run.step(8);
+    run.step(9);
 
     expect(farm.getState().drone).toEqual({ x: 2, y: 0 });
   });

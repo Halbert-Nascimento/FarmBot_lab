@@ -25,4 +25,28 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // The view reads the engine only through its public interface (src/engine/index.ts), never its insides.
+    files: ['src/view/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/engine/*'],
+              message: 'The view may only import from the public interface of the engine (../engine).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Tools that are not part of the game: they run in Node and also send code to the browser to run there.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly', window: 'readonly', document: 'readonly' },
+    },
+  },
 );
