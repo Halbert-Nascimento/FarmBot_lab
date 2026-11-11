@@ -3,6 +3,8 @@ import { createEnvironment } from './commands';
 import { hashString } from './hash';
 import { ITEMS } from './items';
 import { interpret, parseScript } from './interpreter';
+import { DEFAULT_LANGUAGE, isLanguage } from './messages';
+import type { Language } from './messages';
 import { resolveLimits } from './limits';
 import { plantState } from './plants';
 import { createProgressGuard } from './progress';
@@ -14,13 +16,15 @@ import { createWorld } from './world';
  * The machine running out of stack or string space is not the player's fault in a way the
  * game can explain with a raw error, so it becomes a mistake in the script, at the last line seen.
  */
-function asScriptError(error: unknown, line: number): unknown {
+function asScriptError(error: unknown, line: number, language: Language): unknown {
+  if (error instanceof ScriptError) return error.inLanguage(language);
   if (!(error instanceof RangeError)) return error;
-  if (/string length/i.test(error.message)) return new ScriptError('The text is too long', line);
-  return new ScriptError('The script went too deep: calls or values nested too far for the machine to follow', line);
+  return new ScriptError(/string length/i.test(error.message) ? 'textTooLong' : 'tooDeep', line, {}, language);
 }
 
 export function createFarm(config: FarmConfig): Farm {
+  const language = config.language ?? DEFAULT_LANGUAGE;
+  if (!isLanguage(language)) throw new RangeError('The language must be en or pt-BR');
   const world = createWorld(config);
   const env = createEnvironment(world);
   const limits = resolveLimits(config.limits);
@@ -56,7 +60,13 @@ export function createFarm(config: FarmConfig): Farm {
       ),
     drainEvents: world.drainEvents,
     run(source) {
-      const script = interpret(parseScript(source), env, limits);
+      let program;
+      try {
+        program = parseScript(source);
+      } catch (error) {
+        throw asScriptError(error, 0, language);
+      }
+      const script = interpret(program, env, limits);
       const startedAt = clock.deciticks;
       let finished = false;
       let lastResult: unknown;
@@ -84,7 +94,7 @@ export function createFarm(config: FarmConfig): Farm {
             }
           } catch (error) {
             finished = true;
-            throw asScriptError(error, guard.lastLine);
+            throw asScriptError(error, guard.lastLine, language);
           }
         },
         getMeter() {

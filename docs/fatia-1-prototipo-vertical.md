@@ -57,6 +57,17 @@ Pontos pequenos que o GDD não fixava e que o motor adotou. Valem até o balance
 - **Adiado de propósito (fora do #6):** os scripts ainda não veem o estágio de crescimento (o GDD prevê `getProgress` na camada 3), e `plant` e `harvest` não devolvem resultado ao script (o GDD prevê `harvest` devolver `{item, qty}` ou `null`). Entram quando a linguagem tiver variáveis e `if`.
 - **Pendente para a visualização (ticket da cena 3D):** o motor ainda não emite evento de mudança de estágio de crescimento. A visualização hoje precisaria ler o estado para saber o estágio.
 
+## Bilíngue e mensagens de erro (issue #7)
+
+- **Nomes:** todo comando e toda constante existe em inglês e em português, e os dois valem sempre, qualquer que seja o idioma das mensagens. Um jogador pode escrever comandos em inglês e ler erros em português, ou o contrário. Os nomes em português não têm acento, para ficar fácil digitar. Tabela completa em `src/engine/names.ts` (`COMMAND_NAMES` e `CONSTANT_PAIRS`).
+- **Constantes:** `Plant.GRASS`/`Planta.CAPIM`, `Plant.WHEAT`/`Planta.TRIGO`, `Terrain.GRASS`/`Terreno.GRAMA`, `Terrain.TILLED`/`Terreno.ARADO`, `Item.HAY`/`Item.FENO`, `Item.WHEAT`/`Item.TRIGO`, e `Dir.NORTH`/`Dir.NORTE` (e `EAST`/`LESTE`, `SOUTH`/`SUL`, `WEST`/`OESTE`). Os dois nomes dão **o mesmo valor** (por exemplo `"grass"`), então comparar com a constante funciona nos dois idiomas; o texto cru continua em inglês.
+- **Idioma das mensagens:** `FarmConfig.language` (`'en'` por padrão ou `'pt-BR'`). O motor não detecta idioma; quem o escolhe é a interface. Um idioma inexistente faz a criação da fazenda falhar.
+- **Textos fora do código:** `src/engine/locales/en.json` e `pt-BR.json`. Um teste exige as mesmas chaves e os mesmos campos `{...}` nos dois arquivos, e outro exige que todo erro do motor tenha um script de exemplo que o provoca.
+- **Cada erro traz:** a linha, a causa (`reason`), uma dica do que tentar (`hint`) e, quando há um nome parecido, o "Você quis dizer…?" (`didYouMean`). `code` identifica o erro em qualquer idioma. Nomes parecidos têm até 2 edições de distância (1 em nomes de até 3 letras); em caso de empate vence o nome do idioma das mensagens.
+- **Erros de sintaxe:** os mais comuns (símbolo inesperado, texto ou template sem fechamento, nome já declarado, caractere inesperado) têm texto próprio nos dois idiomas. Qualquer outro mostra a mensagem do analisador (em inglês) dentro de um texto traduzido.
+- **Paridade:** o teste `bilingual.test.ts` roda cada comando pelos dois nomes e exige o mesmo estado final, os mesmos eventos e o mesmo custo; e falha se um comando novo não tiver cenário.
+- **Fora desta entrega:** a escolha automática do idioma e a troca manual (REQ-FND-44, prioridade D) ficam com a interface. Os comandos de camadas futuras (`water`, `swap`, `goTo`…) ganham o par português quando forem criados; os nomes já estão no GDD.
+
 ## Linguagem do jogador: o que o motor aceita hoje (3A e 3B, issues #4 e #5)
 
 ### O que existe

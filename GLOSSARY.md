@@ -54,6 +54,18 @@ _Avoid_: código (quando se fala de um programa específico), macro
 Uma rodada de um script na fazenda, do início ao fim ou à interrupção.
 _Avoid_: run, partida
 
+**Apelido de comando**:
+O outro nome, em português ou em inglês, de um comando ou de uma constante. Os dois nomes valem sempre, qualquer que seja o idioma das mensagens, e fazem exatamente o mesmo, com o mesmo custo.
+_Avoid_: tradução, alias, sinônimo
+
+**Idioma das mensagens**:
+O idioma em que o motor escreve os erros do script (pt-BR ou inglês). É escolhido por quem cria a fazenda e não muda os nomes que o jogador pode escrever.
+_Avoid_: idioma do jogo, locale
+
+**Erro do script**:
+Um defeito no código do jogador, dito com a linha, a causa, uma dica do que tentar e, quando há um nome parecido, o "Você quis dizer…?".
+_Avoid_: exceção, bug
+
 **Comando**:
 Uma função do jogo que o script chama para agir (mover, plantar, colher) ou para ler a fazenda (sensores).
 _Avoid_: instrução, função nativa, API (como nome do conceito)

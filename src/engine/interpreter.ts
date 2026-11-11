@@ -15,10 +15,11 @@ import type {
 } from 'acorn';
 import { ASSIGNMENT_COST, CALL_COST, OPERATION_COST } from './costs';
 import type { Limits } from './limits';
+import { ALL_COMMAND_NAMES } from './names';
 import { BINARY, UNARY } from './operators';
 import { Scope } from './scope';
 import type { Binding } from './scope';
-import { ScriptError } from './script-error';
+import { CommandError, ScriptError } from './script-error';
 import {
   createObject,
   ensureTextFits,
@@ -62,12 +63,25 @@ function lineOf(node: Node): number {
   return node.loc?.start.line ?? 0;
 }
 
+/** How the parser starts its messages for the mistakes the game has its own words for. */
+const SYNTAX_ERRORS: readonly (readonly [string, string])[] = [
+  ['Unexpected token', 'syntaxUnexpectedToken'],
+  ['Unterminated string constant', 'syntaxUnterminatedString'],
+  ['Unterminated template', 'syntaxUnterminatedTemplate'],
+  ['Unexpected character', 'syntaxUnexpectedChar'],
+];
+
 export function parseScript(source: string): Program {
   try {
     return parse(source, { ecmaVersion: 2022, sourceType: 'script', locations: true });
   } catch (error) {
     const line = (error as { loc?: { line: number } }).loc?.line ?? 0;
-    throw new ScriptError((error as Error).message, line);
+    // Acorn words its messages as "Unexpected token (3:4)": the position is already in the line.
+    const detail = (error as Error).message.replace(/\s*\(\d+:\d+\)$/, '');
+    const declared = /^Identifier '(.+)' has already been declared$/.exec(detail);
+    if (declared) throw new ScriptError('syntaxAlreadyDeclared', line, { name: declared[1] });
+    const known = SYNTAX_ERRORS.find(([start]) => detail.startsWith(start));
+    throw new ScriptError(known ? known[1] : 'syntaxGeneric', line, { detail });
   }
 }
 
@@ -82,6 +96,17 @@ interface Target {
 
 /** How many loop rounds, calls and commands pass between two looks at how much memory the script holds. */
 const MEMORY_CHECK_INTERVAL = 1000;
+
+/** The unsupported things the game has its own words for, by what the interpreter calls them. */
+const WHAT_KEYS: Readonly<Record<string, string | undefined>> = {
+  'regular expression': 'regex',
+  bigint: 'bigint',
+  'var, use let or const': 'var',
+  'optional chaining': 'optionalChaining',
+  hole: 'hole',
+  method: 'method',
+  'computed property name': 'computedKey',
+};
 
 const GLOBALS: Readonly<Record<string, unknown>> = {
   undefined: undefined,
@@ -118,7 +143,7 @@ export function* interpret(
     if (--untilMemoryCheck > 0) return;
     untilMemoryCheck = MEMORY_CHECK_INTERVAL;
     if (exceedsMemory(activeScopes, limits.memoryUnits)) {
-      throw new ScriptError('The script is using too much memory', lineOf(node));
+      throw new ScriptError('memory', lineOf(node));
     }
   }
 
@@ -135,20 +160,26 @@ export function* interpret(
     if (pendingDeciticks > 0) yield* yieldComputation(node);
   }
 
+  /** The names the player may have meant when they wrote one that does not exist. */
+  function nameCandidates(scope: Scope): string[] {
+    return [...scope.names(), ...Object.keys(env.commands), ...Object.keys(env.constants), ...Object.keys(GLOBALS)];
+  }
+
   function unsupported(node: Node, what: string = node.type): never {
-    throw new ScriptError(`Unsupported syntax: ${what}`, lineOf(node));
+    const whatKey = WHAT_KEYS[what];
+    throw new ScriptError('unsupported', lineOf(node), whatKey ? { whatKey } : { what });
   }
 
   function lookup(name: string, scope: Scope, node: Node): Binding {
     const binding = scope.find(name);
-    if (!binding) throw new ScriptError(`${name} is not defined`, lineOf(node));
-    if (!binding.initialized) throw new ScriptError(`Cannot access '${name}' before initialization`, lineOf(node));
+    if (!binding) throw new ScriptError('notDefined', lineOf(node), { name, guess: name, candidates: nameCandidates(scope) });
+    if (!binding.initialized) throw new ScriptError('beforeInit', lineOf(node), { name });
     return binding;
   }
 
   function store(name: string, value: unknown, scope: Scope, node: Node): void {
     const binding = lookup(name, scope, node);
-    if (binding.constant) throw new ScriptError(`Assignment to constant variable: ${name}`, lineOf(node));
+    if (binding.constant) throw new ScriptError('constAssign', lineOf(node), { name });
     binding.value = value;
   }
 
@@ -166,7 +197,7 @@ export function* interpret(
       return run();
     } catch (error) {
       if (error instanceof ScriptError) throw error;
-      throw new ScriptError('Invalid operation', lineOf(node));
+      throw new ScriptError('invalidOperation', lineOf(node));
     }
   }
 
@@ -183,8 +214,10 @@ export function* interpret(
     return typeof result === 'string' ? ensureTextFits(result, limits.collectionSize, lineOf(node)) : result;
   }
 
-  function requireFunction(value: unknown, label: string, node: Node): UserFunction {
-    if (!(value instanceof UserFunction)) throw new ScriptError(`${label} is not a function`, lineOf(node));
+  function requireFunction(value: unknown, label: string | undefined, node: Node): UserFunction {
+    if (!(value instanceof UserFunction)) {
+      throw new ScriptError(label === undefined ? 'notAFunctionExpression' : 'notAFunction', lineOf(node), { name: label });
+    }
     return value;
   }
 
@@ -245,14 +278,19 @@ export function* interpret(
       case 'Identifier':
         if (scope.find(node.name)) return lookup(node.name, scope, node).value;
         if (node.name in GLOBALS) return GLOBALS[node.name];
-        throw new ScriptError(`${node.name} is not defined`, lineOf(node));
+        throw new ScriptError('notDefined', lineOf(node), { name: node.name, guess: node.name, candidates: nameCandidates(scope) });
       case 'MemberExpression': {
         if (node.object.type === 'Identifier' && !node.computed && !scope.find(node.object.name)) {
           const group = env.constants[node.object.name];
           if (group) {
             const name = (node.property as { name: string }).name;
-            if (name in group) return group[name];
-            throw new ScriptError('Unknown value', lineOf(node));
+            if (Object.hasOwn(group, name)) return group[name];
+            throw new ScriptError('unknownValue', lineOf(node), {
+              group: node.object.name,
+              name,
+              guess: name,
+              candidates: Object.keys(group),
+            });
           }
         }
         const target = yield* evaluate(node.object as Expression, scope);
@@ -328,7 +366,7 @@ export function* interpret(
   }
 
   function* invoke(fn: UserFunction, args: readonly unknown[], node: Node): Coroutine<unknown> {
-    if (depth >= limits.callDepth) throw new ScriptError('Maximum call depth exceeded', lineOf(node));
+    if (depth >= limits.callDepth) throw new ScriptError('callDepth', lineOf(node));
     charge(CALL_COST);
     depth++;
     const slot = activeScopes.length;
@@ -358,7 +396,10 @@ export function* interpret(
         userFunction = requireFunction(lookup(callee.name, scope, node).value, callee.name, node);
       } else {
         command = env.commands[callee.name];
-        if (!command) throw new ScriptError(`Unknown command: ${callee.name}`, lineOf(node));
+        if (!command) {
+          const guess = callee.name;
+          throw new ScriptError('unknownCommand', lineOf(node), { name: guess, guess, candidates: [...nameCandidates(scope), ...ALL_COMMAND_NAMES] });
+        }
       }
     } else if (callee.type === 'MemberExpression') {
       const target = yield* evaluate(callee.object as Expression, scope);
@@ -371,12 +412,12 @@ export function* interpret(
         const method = LIST_METHODS[name];
         listMethod = (args) => method?.(target, args, limits.collectionSize, lineOf(node));
       } else {
-        throw new ScriptError(`${name} is not a function`, lineOf(node));
+        throw new ScriptError('notAFunction', lineOf(node), { name });
       }
     } else if (callee.type === 'Super') {
       return unsupported(callee);
     } else {
-      userFunction = requireFunction(yield* evaluate(callee, scope), 'Expression', node);
+      userFunction = requireFunction(yield* evaluate(callee, scope), undefined, node);
     }
 
     const args: unknown[] = [];
@@ -397,7 +438,8 @@ export function* interpret(
     try {
       action = command(handedOver);
     } catch (error) {
-      throw new ScriptError((error as Error).message, lineOf(node));
+      if (!(error instanceof CommandError)) throw error;
+      throw new ScriptError(error.code, lineOf(node), { name: callee.type === 'Identifier' ? callee.name : '' });
     }
     yield* settle(node);
     return importValue(yield action);

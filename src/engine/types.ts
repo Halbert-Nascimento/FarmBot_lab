@@ -1,5 +1,6 @@
 import type { Item } from './items';
 import type { Limits } from './limits';
+import type { Language } from './messages';
 
 export type { Item };
 export type Terrain = 'grass' | 'tilled';
@@ -26,6 +27,8 @@ export interface FarmConfig {
   readonly seed: number;
   /** Safety limits for the player's scripts. Any left out keeps its default. */
   readonly limits?: Partial<Limits>;
+  /** The language of the error messages. The commands answer to their English and Portuguese names whatever it is. Defaults to English. */
+  readonly language?: Language;
 }
 
 export interface Position {

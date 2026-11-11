@@ -40,16 +40,12 @@ const CIRCULAR_AS_TEXT = '[circular]';
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 function checkKey(key: string, line: number): void {
-  if (FORBIDDEN_KEYS.has(key)) throw new ScriptError(`Property not allowed: ${key}`, line);
+  if (FORBIDDEN_KEYS.has(key)) throw new ScriptError('propertyNotAllowed', line, { key });
 }
 
 export function tooBig(what: 'list' | 'object' | 'text', line: number): ScriptError {
-  const message = {
-    list: 'The list is too big',
-    object: 'The object has too many properties',
-    text: 'The text is too long',
-  }[what];
-  return new ScriptError(message, line);
+  const code = { list: 'listTooBig', object: 'objectTooBig', text: 'textTooLong' }[what];
+  return new ScriptError(code, line);
 }
 
 /** Returns the text if it fits in `maxLength` characters, and refuses it if it does not. */
@@ -67,7 +63,7 @@ function toIndex(key: unknown): number | undefined {
 /** Reads `target[key]`. Only what the player's own values hold is ever found. */
 export function readProperty(target: unknown, key: unknown, line: number): unknown {
   if (target === null || target === undefined) {
-    throw new ScriptError(`Cannot read properties of ${String(target)} (reading '${String(key)}')`, line);
+    throw new ScriptError('cannotRead', line, { target: String(target), key: String(key) });
   }
   const index = toIndex(key);
   if (Array.isArray(target) || typeof target === 'string') {
@@ -86,7 +82,7 @@ export function readProperty(target: unknown, key: unknown, line: number): unkno
 export function writeProperty(target: unknown, key: unknown, value: unknown, line: number, maxSize: number): void {
   if (Array.isArray(target)) {
     const index = toIndex(key);
-    if (index === undefined || index > target.length) throw new ScriptError(`Invalid list position: ${String(key)}`, line);
+    if (index === undefined || index > target.length) throw new ScriptError('invalidListPosition', line, { key: String(key) });
     if (index >= maxSize) throw tooBig('list', line);
     target[index] = value;
   } else if (isScriptObject(target)) {
@@ -99,7 +95,7 @@ export function writeProperty(target: unknown, key: unknown, value: unknown, lin
     }
     target[name] = value;
   } else {
-    throw new ScriptError(`Cannot set properties of ${target === null ? 'null' : typeof target}`, line);
+    throw new ScriptError('cannotSet', line, { target: target === null ? 'null' : typeof target });
   }
 }
 
@@ -173,7 +169,7 @@ export function exportValue(value: unknown, line: number, maxItems: number): unk
     if (!isList && !isScriptObject(item)) return item;
     if (path.has(item)) return CIRCULAR_AS_TEXT;
     items += 1 + (isList ? item.length : Object.keys(item).length);
-    if (items > maxItems) throw new ScriptError('The value is too big', line);
+    if (items > maxItems) throw new ScriptError('valueTooBig', line);
     path.add(item);
     try {
       if (isList) return item.map((entry: unknown) => copy(entry));

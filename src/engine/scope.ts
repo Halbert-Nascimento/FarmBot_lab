@@ -30,6 +30,11 @@ export class Scope {
     return this.parent;
   }
 
+  /** Every name visible from this block, this block's own first. */
+  names(): string[] {
+    return [...this.variables.keys(), ...(this.parent?.names() ?? [])];
+  }
+
   find(name: string): Binding | undefined {
     return this.variables.get(name) ?? this.parent?.find(name);
   }

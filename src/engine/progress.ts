@@ -28,13 +28,10 @@ export function createProgressGuard(limits: Limits): ProgressGuard {
       computeDeciticks = computation || deciticks === 0 ? computeDeciticks + deciticks : 0;
       idleRounds = deciticks === 0 ? idleRounds + 1 : 0;
       if (computeDeciticks > limits.computeTicksWithoutCommand * DECITICKS_PER_TICK) {
-        throw new ScriptError(
-          `The script spent more than ${limits.computeTicksWithoutCommand} ticks calculating without giving a command (is there an infinite loop?)`,
-          lastLine,
-        );
+        throw new ScriptError('computeTooLong', lastLine, { ticks: limits.computeTicksWithoutCommand });
       }
       if (idleRounds > limits.roundsWithoutTime) {
-        throw new ScriptError('The script ran for too long without spending any ticks (is there an infinite loop?)', lastLine);
+        throw new ScriptError('idleRounds', lastLine);
       }
     },
   };

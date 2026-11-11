@@ -1,6 +1,9 @@
 import { DECITICKS_PER_TICK } from './clock';
 import type { Action, Command, Environment } from './interpreter';
 import { isItem } from './items';
+import { buildConstantGroups, COMMAND_NAMES, DIRECTIONS } from './names';
+import type { CommandName } from './names';
+import { CommandError } from './script-error';
 import { PLANTS, plantState } from './plants';
 import type { Item, PlantSpecies, Position, RejectReason } from './types';
 import type { World } from './world';
@@ -11,25 +14,18 @@ const COST = { move: 80, plant: 60, harvest: 60, till: 40, sensor: 10 } as const
 
 const PLANT_SPECIES = Object.keys(PLANTS) as PlantSpecies[];
 
-const DIRECTIONS = {
-  NORTH: { x: 0, y: -1 },
-  EAST: { x: 1, y: 0 },
-  SOUTH: { x: 0, y: 1 },
-  WEST: { x: -1, y: 0 },
-} as const;
-
 function isDirection(value: unknown): value is Position {
   return Object.values(DIRECTIONS).some((direction) => direction === value);
 }
 
-function expectNoArguments(name: string, args: readonly unknown[]): void {
-  if (args.length !== 0) throw new Error(`${name} takes no arguments`);
+function expectNoArguments(args: readonly unknown[]): void {
+  if (args.length !== 0) throw new CommandError('takesNoArguments');
 }
 
 /** A sensor reads the world without changing it. It costs one tick and takes no arguments. */
-function sensor(name: string, read: (startedAt: number) => unknown): Command {
+function sensor(read: (startedAt: number) => unknown): Command {
   return (args) => {
-    expectNoArguments(name, args);
+    expectNoArguments(args);
     return { deciticks: COST.sensor, apply: read };
   };
 }
@@ -39,17 +35,10 @@ function isPlantSpecies(value: unknown): value is PlantSpecies {
 }
 
 export function createEnvironment(world: World): Environment {
-  return {
-    constants: {
-      Plant: { GRASS: 'grass', WHEAT: 'wheat' },
-      Dir: DIRECTIONS,
-      Terrain: { GRASS: 'grass', TILLED: 'tilled' },
-      Item: { HAY: 'hay', WHEAT: 'wheat' },
-    },
-    commands: {
+  const byEnglishName: Record<CommandName, Command> = {
       move: (args): Action => {
         const [direction] = args;
-        if (args.length !== 1 || !isDirection(direction)) throw new Error('move expects a direction');
+        if (args.length !== 1 || !isDirection(direction)) throw new CommandError('moveExpectsDirection');
         return {
           deciticks: COST.move,
           apply() {
@@ -64,7 +53,7 @@ export function createEnvironment(world: World): Environment {
         };
       },
       harvest: (args): Action => {
-        expectNoArguments('harvest', args);
+        expectNoArguments(args);
         return {
           deciticks: COST.harvest,
           apply(startedAt) {
@@ -90,22 +79,22 @@ export function createEnvironment(world: World): Environment {
           world.emit({ type: 'logged', values: structuredClone(args) });
         },
       }),
-      random: sensor('random', () => world.rng.next()),
-      getPos: sensor('getPos', () => ({ ...world.drone })),
-      getSize: sensor('getSize', () => ({ width: world.config.width, height: world.config.height })),
-      getPlant: sensor('getPlant', () => world.cellAtDrone()?.plant?.species ?? null),
-      isReady: sensor('isReady', (startedAt) => {
+      random: sensor(() => world.rng.next()),
+      getPos: sensor(() => ({ ...world.drone })),
+      getSize: sensor(() => ({ width: world.config.width, height: world.config.height })),
+      getPlant: sensor(() => world.cellAtDrone()?.plant?.species ?? null),
+      isReady: sensor((startedAt) => {
         const plant = world.cellAtDrone()?.plant;
         return plant ? plantState(plant, startedAt).stage === 'ready' : false;
       }),
-      getTerrain: sensor('getTerrain', () => world.cellAtDrone()?.terrain),
+      getTerrain: sensor(() => world.cellAtDrone()?.terrain),
       getStock: (args): Action => {
         const [item] = args;
-        if (args.length !== 1 || !isItem(item)) throw new Error('getStock expects an item');
+        if (args.length !== 1 || !isItem(item)) throw new CommandError('getStockExpectsItem');
         return { deciticks: COST.sensor, apply: () => world.stock[item] };
       },
       till: (args): Action => {
-        expectNoArguments('till', args);
+        expectNoArguments(args);
         return {
           deciticks: COST.till,
           apply() {
@@ -123,13 +112,13 @@ export function createEnvironment(world: World): Environment {
       wait: (args): Action => {
         const [ticks] = args;
         if (args.length !== 1 || typeof ticks !== 'number' || !Number.isInteger(ticks) || ticks < 0) {
-          throw new Error('wait expects a whole number of ticks');
+          throw new CommandError('waitExpectsTicks');
         }
         return { deciticks: ticks * DECITICKS_PER_TICK, apply() {} };
       },
       plant: (args): Action => {
         const [species] = args;
-        if (args.length !== 1 || !isPlantSpecies(species)) throw new Error('plant expects a plant species');
+        if (args.length !== 1 || !isPlantSpecies(species)) throw new CommandError('plantExpectsSpecies');
         return {
           deciticks: COST.plant,
           apply() {
@@ -148,6 +137,13 @@ export function createEnvironment(world: World): Environment {
           },
         };
       },
-    },
   };
+
+  // Each command answers to its English name and to its Portuguese one: the very same function.
+  const commands: Record<string, Command> = Object.create(null);
+  for (const [english, command] of Object.entries(byEnglishName)) {
+    commands[english] = command;
+    commands[COMMAND_NAMES[english as CommandName]] = command;
+  }
+  return { commands, constants: buildConstantGroups() };
 }
