@@ -57,13 +57,47 @@ Pontos pequenos que o GDD não fixava e que o motor adotou. Valem até o balance
 - **Adiado de propósito (fora do #6):** os scripts ainda não veem o estágio de crescimento (o GDD prevê `getProgress` na camada 3), e `plant` e `harvest` não devolvem resultado ao script (o GDD prevê `harvest` devolver `{item, qty}` ou `null`). Entram quando a linguagem tiver variáveis e `if`.
 - **Pendente para a visualização (ticket da cena 3D):** o motor ainda não emite evento de mudança de estágio de crescimento. A visualização hoje precisaria ler o estado para saber o estágio.
 
-## Linguagem do jogador: o que o motor aceita hoje (ticket 3A)
+## Linguagem do jogador: o que o motor aceita hoje (tickets 3A e 3B)
+
+### O que existe
 
 - Variáveis `let` e `const` com escopo de bloco e "zona morta" como no JavaScript (usar antes da linha da declaração é erro, mesmo que exista uma variável de fora com o mesmo nome), `if`/`else`, `for`, `while`, `break`, funções (declaração, expressão e seta), `return`, closures e recursão. Operadores aritméticos, de comparação, lógicos (`&&`, `||`), unários (`!`, `-`, `+`), atribuição composta e `++`/`--`, todos com a semântica do JavaScript.
 - Cada rodada de um `for` ou `while` recebe uma cópia nova das variáveis do laço, então uma closure criada numa rodada enxerga o valor daquela rodada.
-- Ainda não aceitos (o motor responde "Unsupported syntax" apontando a linha): `var` (pede `let` ou `const`), template strings, objetos, listas, `continue`, `typeof`, operador ternário `?:`, `??`, `||=` e `&&=`, vírgula, parâmetros com valor padrão ou desestruturação, `break` com rótulo e função declarada fora do início de um bloco (por exemplo, como corpo solto de um `if`). Template strings, objetos e listas chegam no 3B. O ternário é um candidato natural, por ser comum em iniciantes.
-- Uma função usada como valor aparece como o texto `[function]` em `log` e nunca é entregue a um comando.
-- Operações do script ainda **não custam tempo**. Só os comandos custam. As operações a 0,1 tick e as chamadas a 0,5 tick chegam no 3B.
-- **Proteção provisória contra laço infinito:** um script é interrompido depois de 10.000 rodadas de laço seguidas sem gastar nenhum tick, apontando a linha. Isso também interrompe um laço longo que só faz contas, até o 3B dar custo às operações. O 3B troca esse limite pelo de ticks sem progresso.
-- Chamadas de função aninhadas além de 200 níveis são interrompidas. Esse limite deve ser revisto antes das fatias com recursão profunda (por exemplo, o labirinto).
+- Template strings, listas (`[...]`, `length`, leitura e escrita por posição, `push` e `pop`) e objetos (`{ a: 1 }`, leitura e escrita de propriedades com ponto ou colchetes). Escrever numa lista só é permitido até uma posição depois do fim, então as listas nunca têm buracos. Um texto também tem `length` e posições para leitura.
+- O que um comando devolve (por exemplo, `getPos()`) é uma cópia que o script pode ler e alterar sem afetar a fazenda. Uma função usada como valor aparece como o texto `[function]` em `log` e nunca é entregue a um comando.
+- Ainda não aceitos (o motor responde "Unsupported syntax" apontando a linha): `var` (pede `let` ou `const`), `continue`, `for...of`, `typeof`, operador ternário `?:`, `??`, `||=` e `&&=`, encadeamento opcional `?.`, vírgula, espalhamento `...`, nomes de propriedade calculados, métodos em objeto, buracos em listas, métodos de lista além de `push` e `pop`, métodos de texto, parâmetros com valor padrão ou desestruturação, `break` com rótulo e função declarada fora do início de um bloco. O ternário e o `for...of` são candidatos naturais, por serem comuns em iniciantes.
+
+### O que custa
+
+| Ação | Custo |
+| --- | --- |
+| Conta, comparação, `!`, `-`, `&&`, `||` (cada operador avaliado) | 0,1 tick |
+| Atribuição ou declaração com valor | 0,1 tick |
+| Atribuição composta (`+=`) e `++`/`--` | 0,2 tick (operação e atribuição) |
+| Chamada de função do jogador, de função guardada num objeto, `push` e `pop` | 0,5 tick |
+| Comando | só o custo da tabela do GDD, sem acréscimo pela chamada |
+| Ler variável, posição de lista, propriedade ou `length`; criar lista, objeto ou texto | grátis |
+
+O tempo de cálculo passa no mundo: uma planta cresce enquanto o script só calcula, e um evento é carimbado depois do cálculo que o precede. O resultado final não depende de como o orçamento de `step` é fatiado.
+
+### O que o protege
+
+Todos os limites são configuráveis por fazenda (`FarmConfig.limits`), com os padrões abaixo.
+
+- **Progresso é um comando que gasta ticks.** `while (true) { wait(1); }` continua válido para sempre (é o robô clássico; o jogador o interrompe), mas um laço que só calcula, ou que só chama comandos gratuitos como `log`, é interrompido depois de **5.000 ticks** (`computeTicksWithoutCommand`) sem comando que gaste tempo, apontando a linha. Cada comando que gasta ticks zera a contagem. Esse limite também pega uma função que se chama sem parar e uma recursão que se multiplica sem fim.
+- **Rodadas sem tempo:** `while (true) {}` e laços só de comandos gratuitos são interrompidos depois de **10.000** rodadas seguidas sem gastar nenhum tick (`roundsWithoutTime`).
+- **Profundidade de chamadas:** **200** por padrão (`callDepth`), sem aumento. Medimos que a pilha da máquina aguenta cerca de 500 chamadas aninhadas do interpretador e estoura antes de 1.000; por isso nenhuma configuração passa de **400** (`MAX_CALL_DEPTH`). Antes de aumentar o padrão, medir de novo em cada navegador suportado e para as fatias com recursão profunda (o labirinto).
+- **Tamanho:** listas, objetos (número de propriedades) e textos (caracteres) valem no máximo **10.000** (`collectionSize`), tanto ao escrevê-los quanto ao fazê-los crescer.
+- **Operadores:** o que o JavaScript do hospedeiro recusaria (por exemplo, comparar um objeto com um número) vira um erro do script ("Invalid operation") com a linha.
+
+### Isolamento (REQ-FND-14, REQ-NFR-06)
+
+O isolamento é **por construção**: o script nunca roda como JavaScript do navegador, é interpretado.
+
+- Um nome só existe se o jogador o declarou, ou se é uma constante ou um comando do jogo. `fetch`, `localStorage`, `document`, `window`, `process`, `eval`, `Function`, `setTimeout`, `Math`, `Object` e `JSON` simplesmente não existem ("is not defined" ou "Unknown command"). `new`, `this` e `import()` não são aceitos.
+- Só se chamam funções do jogador, comandos e os métodos `push` e `pop` de listas. Nenhuma função do hospedeiro é alcançável.
+- Listas, objetos e textos do jogador só mostram o que o jogador pôs neles. Os objetos do jogador não têm protótipo, e os nomes `constructor`, `__proto__` e `prototype` são proibidos para leitura e escrita.
+- Os testes (`isolation.test.ts`) substituem `fetch`, `XMLHttpRequest`, `WebSocket`, `localStorage`, `sessionStorage`, `indexedDB`, `document`, `window` e `navigator` por funções espiãs e exigem que nenhuma seja chamada por 27 tentativas de acesso e 15 tentativas de sair pelos valores do jogo, e que o JavaScript do hospedeiro não seja alterado.
+- Falta, e fica para a integração com o navegador: rodar o motor num *worker* (defesa em profundidade) e medir o desempenho e a pilha em cada navegador suportado.
+
 

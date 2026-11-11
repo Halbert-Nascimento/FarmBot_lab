@@ -20,6 +20,14 @@ export const DEFAULT_LIMITS: Limits = {
   collectionSize: 10_000,
 };
 
+/**
+ * The deepest nesting of calls any configuration may ask for. Measured: the machine stack holds
+ * about 500 nested calls of the interpreter and overflows before 1000, so this leaves a margin.
+ * Do not raise it without measuring again on every supported browser.
+ */
+export const MAX_CALL_DEPTH = 400;
+
 export function resolveLimits(limits: Partial<Limits> | undefined): Limits {
-  return { ...DEFAULT_LIMITS, ...limits };
+  const resolved = { ...DEFAULT_LIMITS, ...limits };
+  return { ...resolved, callDepth: Math.min(resolved.callDepth, MAX_CALL_DEPTH) };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFarm, DEFAULT_LIMITS, ScriptError } from './index';
+import { createFarm, DEFAULT_LIMITS, MAX_CALL_DEPTH, ScriptError } from './index';
 import type { Limits } from './index';
 import { config } from './test-utils';
 
@@ -100,6 +100,14 @@ describe('how deep functions may call one another', () => {
 
     const { error } = runWith(`${down}down(5);`, { callDepth: 5 });
     expect((error as Error).message).toMatch(/Line 3: Maximum call depth exceeded/);
+  });
+
+  it('cannot be set above the ceiling the machine stack is known to hold', () => {
+    const { error } = runWith(`${down}down(1000);`, { callDepth: 100_000 });
+
+    expect(error).toBeInstanceOf(ScriptError);
+    expect((error as Error).message).toMatch(/Maximum call depth exceeded/);
+    expect(runWith(`${down}down(${MAX_CALL_DEPTH - 1});`, { callDepth: 100_000 }).error).toBeUndefined();
   });
 
   it('holds at the default depth without running out of the machine stack', () => {

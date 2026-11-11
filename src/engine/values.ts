@@ -140,3 +140,15 @@ export function exportValue(value: unknown, copies = new Map<object, unknown>())
   }
   return value;
 }
+
+/**
+ * A value a command gave back, made into the player's own kind of value: plain data from
+ * the farm becomes lists and objects the script can read, always as a copy.
+ */
+export function importValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((item) => importValue(item));
+  if (typeof value !== 'object' || value === null) return value;
+  const object = createObject();
+  for (const [name, item] of Object.entries(value)) object[name] = importValue(item);
+  return object;
+}

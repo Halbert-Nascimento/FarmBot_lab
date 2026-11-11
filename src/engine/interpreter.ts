@@ -21,6 +21,7 @@ import { ScriptError } from './script-error';
 import {
   createObject,
   exportValue,
+  importValue,
   LIST_METHODS,
   readProperty,
   stringify,
@@ -375,7 +376,7 @@ export function* interpret(
       throw new ScriptError((error as Error).message, lineOf(node));
     }
     yield* settle(node);
-    return yield action;
+    return importValue(yield action);
   }
 
   /**

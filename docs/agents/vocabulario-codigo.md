@@ -20,6 +20,7 @@ Identificadores e comentários do código ficam em **inglês**. Documentação, 
 | Estoque | `Stock` |
 | Planta plantada | `PlantState` (visto de fora) e `PlantedPlant` (guardado no mundo) |
 | Recusa | evento `rejected`, com `RejectReason` |
+| Limites de segurança do script | `Limits` (`FarmConfig.limits`) |
 | Estágio de crescimento | `GrowthStage` (`sprout`, `growing`, `ready`) |
 | Ação | `Action` |
 | Medidor de execução | `Meter` |
