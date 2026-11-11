@@ -44,6 +44,9 @@ Identificadores e comentários do código ficam em **inglês**. Documentação, 
 | Cena | `FarmScene` |
 | Console | `ConsoleEntry` (uma linha) |
 | Sessão | `Session` |
+| Idioma da interface | `Language` na `Session` e no `createApp` |
+| Velocidade | `Speed` (`SPEEDS`) |
+| Palco (onde a cena é desenhada: renderizador, luz e câmera) | `Stage` |
 
 Comandos do jogador têm nome em inglês e em português (REQ-FND-41), definidos pelo GDD §9. Os nomes em inglês são os identificadores internos, e os nomes em português são apelidos.
 

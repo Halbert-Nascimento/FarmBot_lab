@@ -277,4 +277,33 @@ describe('the console', () => {
     expect(lines(session).at(-1)).toMatch(/^Finished in /);
     expect(lines(session).at(-2)).toMatch(/4999$/);
   });
+
+  it('says so when it has dropped older lines, instead of dropping them quietly', () => {
+    const session = newSession();
+    session.speed = 'instant';
+    session.run('for (let i = 0; i < 5000; i++) {\n  log(i);\n  wait(1);\n}');
+    playOut(session);
+
+    expect(lines(session)[0]).toBe('(Older lines were removed to make room.)');
+    expect(lines(session, 'pt-BR')[0]).toBe('(As linhas mais antigas foram apagadas para abrir espaço.)');
+  });
+
+  it('does not say so when nothing was dropped', () => {
+    const session = newSession();
+    session.run(FIRST_SCRIPT);
+    playOut(session);
+
+    expect(lines(session).join('\n')).not.toMatch(/Older lines/);
+  });
+});
+
+describe('an empty editor', () => {
+  it.each(['', '   ', '\n\n\t'])('is not run: the player is told to write a command first (%j)', (source) => {
+    const session = newSession();
+    session.run(source);
+
+    expect(session.status).toBe('idle');
+    expect(lines(session)).toEqual([expect.stringMatching(/^The code is empty\. Write a command, for example move\(Dir\.EAST\);/)]);
+    expect(lines(session, 'pt-BR')).toEqual([expect.stringMatching(/^O código está vazio\. Escreva um comando, por exemplo mover\(Dir\.LESTE\);/)]);
+  });
 });

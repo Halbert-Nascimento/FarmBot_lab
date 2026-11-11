@@ -1,4 +1,4 @@
-import { createFarm } from '../engine';
+import { createFarm, formatTicks } from '../engine';
 import type { Farm, FarmEvent, FarmState, Language, Run } from '../engine';
 import type { FarmScene } from './farm-scene';
 import { entryFor } from './i18n';
@@ -28,7 +28,8 @@ export interface SessionOptions {
  * same result every time; Reset puts the farm back at the start without running anything. There is never
  * more than one run: starting another one drops the one that was going.
  *
- * It knows nothing about the editor, and the scene and the engine know nothing about it.
+ * It keeps the scene up to date with the farm, but knows nothing about the editor or the page, and
+ * the scene and the engine know nothing about it.
  */
 export class Session {
   /** The language of the messages of the next run. The console can be read in any language at any time. */
@@ -74,7 +75,7 @@ export class Session {
 
   /** The ticks the run has spent, with exactly one decimal place. */
   get meter(): string {
-    return this.currentRun?.getMeter().formatted ?? '0.0';
+    return this.currentRun?.getMeter().formatted ?? formatTicks(0);
   }
 
   get speed(): Speed {
@@ -96,7 +97,10 @@ export class Session {
 
   private write(entry: ConsoleEntry): void {
     this.log.push(entry);
-    if (this.log.length > MAX_ENTRIES) this.log.splice(0, this.log.length - MAX_ENTRIES);
+    if (this.log.length > MAX_ENTRIES) {
+      // The oldest lines go, and a note in their place says so.
+      this.log.splice(0, this.log.length - MAX_ENTRIES + 1, { kind: 'trimmed' });
+    }
     this.changes++;
   }
 
@@ -112,6 +116,13 @@ export class Session {
   /** Starts the farm over from scratch and runs the script on it. */
   run(source: string): void {
     this.startOver();
+    if (source.trim() === '') {
+      // Nothing to run: say so, instead of a run that ends at once and teaches nothing.
+      this.scene.sync(this.farm.getState());
+      this.write({ kind: 'empty' });
+      this.currentStatus = 'idle';
+      return;
+    }
     this.write({ kind: 'started' });
     try {
       this.currentRun = this.farm.run(source);

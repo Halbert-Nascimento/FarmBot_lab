@@ -153,6 +153,14 @@ _Avoid_: núcleo (minúsculo)
 A parte que implementa as regras do jogo e roda sem interface.
 _Avoid_: engine, backend
 
+**Idioma da interface**:
+O idioma em que a página mostra seus textos, as instruções e o console (pt-BR ou inglês). O jogador o troca a qualquer momento, e ele passa a ser o idioma das mensagens da execução seguinte.
+_Avoid_: idioma do jogo, locale
+
+**Velocidade**:
+O ritmo em que a tela pede tempo ao motor: 1×, 4×, 16× ou instantâneo. Nunca muda o resultado de uma execução.
+_Avoid_: aceleração, taxa de quadros
+
 **Console**:
 A lista do que aconteceu numa execução, embaixo do editor: o que o script escreveu, colheitas, avisos, erros e os ticks gastos.
 _Avoid_: terminal, log (como nome do painel), saída

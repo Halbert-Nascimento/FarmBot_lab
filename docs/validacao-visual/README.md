@@ -45,7 +45,7 @@ Fluxo de primeiro uso, com cliques e teclado de verdade no Edge (`pnpm capture 4
 | `marco-4-06-script-digitado.png` | Um script digitado no editor e executado com Ctrl+Enter |
 | `marco-4-07-erro-pt.png` | Uma recusa da fazenda, um aviso e um erro com linha, sugestão e dica, em português |
 | `marco-4-08-erro-en.png` | O mesmo console depois de trocar o idioma para inglês |
-| `marco-4-09-ajuda-comandos-en.png` | A lista de ordens que o drone entende, em inglês |
+| `marco-4-09-ajuda-comandos-en.png` | A lista de comandos que o drone entende, em inglês |
 | `marco-4-10-abertura-en.png` | A página ao abrir em inglês, com o exemplo em inglês |
 | `marco-4-11-janela-estreita.png` | Janela estreita (420 px): editor em cima, fazenda embaixo |
 

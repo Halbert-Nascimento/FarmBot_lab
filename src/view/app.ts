@@ -2,7 +2,7 @@ import { COMMAND_NAMES } from '../engine';
 import type { Language } from '../engine';
 import { createEditor } from './editor';
 import { FarmScene } from './farm-scene';
-import { describeEntry, translate } from './i18n';
+import { codeAfterLanguageChange, describeEntry, HELP_STEPS, translate } from './i18n';
 import type { UiKey } from './i18n';
 import type { Speed } from './player';
 import { Session, SPEEDS } from './session';
@@ -42,8 +42,9 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', 
 
 /**
  * The interface: it lays out the editor, the scene and the console, and passes messages between them.
- * It is the only part that knows all three. The editor only holds text, the scene only draws, and the
- * session only runs: none of them knows the others.
+ * It is the only part that knows all three. The editor only holds text and the scene only draws: neither
+ * knows anything else. The session runs the farm and keeps the scene up to date with it, and knows
+ * nothing about the editor or the page.
  */
 export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
   let language = options.language;
@@ -63,7 +64,7 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
   help.open = true;
   const helpTitle = element('summary', '', help);
   const steps = element('ol', 'steps', help);
-  const stepItems = [1, 2, 3, 4].map(() => element('li', '', steps));
+  const stepItems = HELP_STEPS.map((key) => ({ key, item: element('li', '', steps) }));
   const ticksNote = element('p', 'note', help);
   const commands = element('details', 'commands', help);
   const commandsTitle = element('summary', '', commands);
@@ -119,9 +120,7 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
     languageButton.textContent = text('ui.switchLanguage');
     languageButton.title = text('ui.switchLanguage.hint');
     helpTitle.textContent = text('help.title');
-    stepItems.forEach((item, index) => {
-      item.textContent = text(`help.step${index + 1}` as UiKey);
-    });
+    for (const { key, item } of stepItems) item.textContent = text(key);
     ticksNote.textContent = text('help.ticks');
     commandsTitle.textContent = text('help.commands.title');
     commandList.replaceChildren(
@@ -203,8 +202,10 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
     const previous = language;
     language = language === 'en' ? 'pt-BR' : 'en';
     session.language = language;
-    // The example follows the language, unless the player has already changed the code.
-    if (editor.getCode() === translate(previous, 'example')) editor.setCode(text('example'));
+    // The example follows the language, unless the player has already written code of their own.
+    const code = editor.getCode();
+    const next = codeAfterLanguageChange(code, previous, language);
+    if (next !== code) editor.setCode(next);
     renderTexts();
     options.onLanguage?.(language);
   });

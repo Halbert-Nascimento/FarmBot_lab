@@ -162,7 +162,7 @@ if (milestone === '4') {
   await page.keyboard.type('mover(Dir.LESTE);\nplantar(Planta.CAPIM);\nregistrar(posicao());', { delay: 5 });
   note(`[digitado]\n${await farmbot('getCode')}`);
   await page.keyboard.press('Control+Enter');
-  await page.waitForFunction(() => window.__farmbot.lines().some((line) => line.includes('"x":1')), null, { timeout: 20_000 });
+  await page.waitForFunction(() => window.__farmbot.lines().some((line) => line.includes('x: 1')), null, { timeout: 20_000 });
   await finished();
   await shot('marco-4-06-script-digitado');
   await report('script digitado');

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COMMAND_NAMES, createFarm, LANGUAGES } from '../engine';
 import type { FarmEvent, RejectReason } from '../engine';
-import { describeEntry, detectLanguage, entryFor, translate } from './i18n';
+import { codeAfterLanguageChange, describeEntry, detectLanguage, entryFor, HELP_STEPS, translate } from './i18n';
 import en from './locales/en.json';
 import ptBR from './locales/pt-BR.json';
 
@@ -74,6 +74,46 @@ describe('choosing the language', () => {
   });
 });
 
+describe('the instructions', () => {
+  it('say what each button does, how to go faster and what a comment is, in both languages', () => {
+    for (const language of LANGUAGES) {
+      const steps = HELP_STEPS.map((key) => translate(language, key)).join(' ');
+
+      expect(steps).toContain(translate(language, 'ui.run'));
+      expect(steps).toContain(translate(language, 'ui.reset'));
+      expect(steps).toContain(translate(language, 'ui.pause'));
+      expect(steps).toContain(translate(language, 'ui.speed.instant'));
+      expect(steps).toContain('//');
+    }
+  });
+
+  it('tell which way each direction points on the screen', () => {
+    expect(translate('pt-BR', 'help.cmd.move')).toMatch(/direita/);
+    expect(translate('en', 'help.cmd.move')).toMatch(/right/);
+  });
+});
+
+describe('the example when the language changes', () => {
+  const english = translate('en', 'example');
+  const portuguese = translate('pt-BR', 'example');
+
+  it('follows the language while the player has not changed it', () => {
+    expect(codeAfterLanguageChange(english, 'en', 'pt-BR')).toBe(portuguese);
+    expect(codeAfterLanguageChange(portuguese, 'pt-BR', 'en')).toBe(english);
+  });
+
+  it('follows the language even if only blank space was changed', () => {
+    expect(codeAfterLanguageChange(`\n${english}  \n\n`, 'en', 'pt-BR')).toBe(portuguese);
+  });
+
+  it('is left alone once the player has written something of their own', () => {
+    const mine = `${english}move(Dir.EAST);\n`;
+
+    expect(codeAfterLanguageChange(mine, 'en', 'pt-BR')).toBe(mine);
+    expect(codeAfterLanguageChange('', 'en', 'pt-BR')).toBe('');
+  });
+});
+
 describe('filling in a text', () => {
   it('puts the values in their places', () => {
     expect(translate('en', 'console.finished', { ticks: '12.5' })).toBe('Finished in 12.5 ticks.');
@@ -92,7 +132,7 @@ describe('a console line', () => {
   };
 
   it('starts with the tick it happened at, with one decimal place', () => {
-    expect(describeEntry(entryFor(events['logged'] as FarmEvent)!, 'en').text).toBe('[12.5] a 1 true null [1,2] {"x":1}');
+    expect(describeEntry(entryFor(events['logged'] as FarmEvent)!, 'en').text).toBe('[12.5] a 1 true null [1, 2] {x: 1}');
   });
 
   it.each(Object.entries(events))('is written for %s, in both languages', (_type, event) => {
@@ -104,6 +144,12 @@ describe('a console line', () => {
     expect(english.text).toMatch(/^\[\d+\.\d\] .+/);
     expect(portuguese.text).toMatch(/^\[\d+\.\d\] .+/);
     if (event.type !== 'logged') expect(portuguese.text).not.toBe(english.text);
+  });
+
+  it('shows numbers that are not ordinary numbers as what they are, never as null', () => {
+    const odd: FarmEvent = { type: 'logged', timeDeciticks: 0, values: [Number.NaN, Number.POSITIVE_INFINITY, undefined, [Number.NaN, 'a'], { n: Number.NEGATIVE_INFINITY }] };
+
+    expect(describeEntry(entryFor(odd)!, 'en').text).toBe('[0.0] NaN Infinity undefined [NaN, "a"] {n: -Infinity}');
   });
 
   it('is not written for what the scene already shows', () => {

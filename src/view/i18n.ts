@@ -1,4 +1,4 @@
-import { ScriptError } from '../engine';
+import { formatTicks, ScriptError } from '../engine';
 import type { FarmEvent, Language } from '../engine';
 import en from './locales/en.json';
 import ptBR from './locales/pt-BR.json';
@@ -13,9 +13,22 @@ export function translate(language: Language, key: UiKey, values: Readonly<Recor
   return CATALOGS[language][key].replace(/\{(\w+)\}/g, (_match, name: string) => String(values[name] ?? ''));
 }
 
+/** The steps of "how to play", in order. */
+export const HELP_STEPS: readonly UiKey[] = ['help.step1', 'help.step2', 'help.step3', 'help.step4', 'help.step5'];
+
 /** The language to open in, from what the browser says the person prefers: Portuguese for any `pt`, English otherwise. */
 export function detectLanguage(preferred: string | undefined): Language {
   return preferred?.toLowerCase().startsWith('pt') ? 'pt-BR' : 'en';
+}
+
+const withoutBlanks = (code: string): string => code.replace(/\s+/g, '');
+
+/**
+ * What the editor should hold after the language changes: the example of the new language if the player
+ * has not written anything of their own yet (blank space aside), and their own code otherwise.
+ */
+export function codeAfterLanguageChange(code: string, previous: Language, next: Language): string {
+  return withoutBlanks(code) === withoutBlanks(translate(previous, 'example')) ? translate(next, 'example') : code;
 }
 
 /**
@@ -23,8 +36,7 @@ export function detectLanguage(preferred: string | undefined): Language {
  * again in another language at any time.
  */
 export type ConsoleEntry =
-  | { readonly kind: 'started' }
-  | { readonly kind: 'reset' }
+  | { readonly kind: 'started' | 'reset' | 'empty' | 'trimmed' }
   | { readonly kind: 'finished'; readonly ticks: string }
   | { readonly kind: 'event'; readonly event: ConsoleEvent }
   | { readonly kind: 'error'; readonly error: unknown };
@@ -32,11 +44,13 @@ export type ConsoleEntry =
 /** The events of the farm that deserve a line. The others (moving, planting, tilling) are plain to see in the scene. */
 type ConsoleEvent = Extract<FarmEvent, { type: 'logged' | 'harvested' | 'destroyed' | 'bumped' | 'rejected' }>;
 
-const CONSOLE_EVENTS: ReadonlySet<string> = new Set(['logged', 'harvested', 'destroyed', 'bumped', 'rejected']);
+function isConsoleEvent(event: FarmEvent): event is ConsoleEvent {
+  return event.type === 'logged' || event.type === 'harvested' || event.type === 'destroyed' || event.type === 'bumped' || event.type === 'rejected';
+}
 
 /** The console line for an event of the farm, if it gets one. */
 export function entryFor(event: FarmEvent): ConsoleEntry | undefined {
-  return CONSOLE_EVENTS.has(event.type) ? { kind: 'event', event: event as ConsoleEvent } : undefined;
+  return isConsoleEvent(event) ? { kind: 'event', event } : undefined;
 }
 
 export type Tone = 'info' | 'log' | 'warn' | 'error';
@@ -46,16 +60,27 @@ export interface ConsoleLine {
   readonly tone: Tone;
 }
 
-/** A logged value the way the console shows it: text as it is, anything else in its JSON form. */
-function show(value: unknown): string {
-  return typeof value === 'string' ? value : (JSON.stringify(value) ?? String(value));
+/**
+ * A logged value the way the console shows it: a text as it is, and anything else the way it is written
+ * in code. Numbers that are not ordinary numbers (NaN, Infinity) are shown as what they are.
+ */
+function show(value: unknown, nested = false): string {
+  if (typeof value === 'string') return nested ? JSON.stringify(value) : value;
+  if (Array.isArray(value)) return `[${value.map((item) => show(item, true)).join(', ')}]`;
+  if (typeof value === 'object' && value !== null) {
+    return `{${Object.entries(value)
+      .map(([key, item]) => `${key}: ${show(item, true)}`)
+      .join(', ')}}`;
+  }
+  return String(value);
 }
 
 function describeEvent(event: ConsoleEvent, language: Language): ConsoleLine {
-  const stamp = `[${(event.timeDeciticks / 10).toFixed(1)}] `;
+  // The engine says how a time is written, so the console and the meter always agree.
+  const stamp = `[${formatTicks(event.timeDeciticks)}] `;
   switch (event.type) {
     case 'logged':
-      return { text: stamp + event.values.map(show).join(' '), tone: 'log' };
+      return { text: stamp + event.values.map((value) => show(value)).join(' '), tone: 'log' };
     case 'harvested':
       return {
         text: stamp + translate(language, 'console.harvested', { quantity: event.quantity, item: translate(language, `console.item.${event.item}`) }),
@@ -82,9 +107,11 @@ function describeEvent(event: ConsoleEvent, language: Language): ConsoleLine {
 export function describeEntry(entry: ConsoleEntry, language: Language): ConsoleLine {
   switch (entry.kind) {
     case 'started':
-      return { text: translate(language, 'console.started'), tone: 'info' };
     case 'reset':
-      return { text: translate(language, 'console.reset'), tone: 'info' };
+    case 'trimmed':
+      return { text: translate(language, `console.${entry.kind}`), tone: 'info' };
+    case 'empty':
+      return { text: translate(language, 'console.empty'), tone: 'warn' };
     case 'finished':
       return { text: translate(language, 'console.finished', { ticks: entry.ticks }), tone: 'info' };
     case 'event':
