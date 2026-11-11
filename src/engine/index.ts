@@ -17,6 +17,8 @@ export type {
   Terrain,
 } from './types';
 export { ITEMS } from './items';
-export { ScriptError } from './interpreter';
+export { DEFAULT_LIMITS } from './limits';
+export type { Limits } from './limits';
+export { ScriptError } from './script-error';
 export { createClock, formatTicks } from './clock';
 export type { Clock } from './clock';

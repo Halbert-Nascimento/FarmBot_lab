@@ -2,19 +2,34 @@ import { parse } from 'acorn';
 import type {
   ArrowFunctionExpression,
   AssignmentExpression,
-  BlockStatement,
   CallExpression,
   Expression,
   FunctionDeclaration,
   FunctionExpression,
+  Identifier,
+  MemberExpression,
   Node,
   Program,
   Statement,
   UpdateExpression,
 } from 'acorn';
+import type { Limits } from './limits';
 import { BINARY, UNARY } from './operators';
 import { Scope } from './scope';
 import type { Binding } from './scope';
+import { ScriptError } from './script-error';
+import {
+  createObject,
+  exportValue,
+  LIST_METHODS,
+  readProperty,
+  stringify,
+  tooBig,
+  UserFunction,
+  writeProperty,
+} from './values';
+
+export { ScriptError } from './script-error';
 
 /** A timed operation the script asks the farm to perform. */
 export interface Action {
@@ -37,16 +52,6 @@ export interface Environment {
   readonly constants: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 }
 
-export class ScriptError extends Error {
-  constructor(
-    message: string,
-    readonly line: number,
-  ) {
-    super(`Line ${line}: ${message}`);
-    this.name = 'ScriptError';
-  }
-}
-
 function lineOf(node: Node): number {
   return node.loc?.start.line ?? 0;
 }
@@ -63,17 +68,11 @@ export function parseScript(source: string): Program {
 /** How a statement ended, when it did not simply run to its end. */
 type Completion = { readonly type: 'break' } | { readonly type: 'return'; readonly value: unknown } | undefined;
 
-/** A function the player wrote. It remembers the scope it was written in. */
-class UserFunction {
-  constructor(
-    readonly params: readonly string[],
-    readonly body: BlockStatement | Expression,
-    readonly scope: Scope,
-  ) {}
+/** Something a script can read and write: a variable, a list item or an object property. */
+interface Target {
+  get(): unknown;
+  set(value: unknown): void;
 }
-
-/** Calls nested deeper than this are stopped, so a function that calls itself forever cannot hang the game. */
-const MAX_CALL_DEPTH = 200;
 
 const GLOBALS: Readonly<Record<string, unknown>> = {
   undefined: undefined,
@@ -81,14 +80,15 @@ const GLOBALS: Readonly<Record<string, unknown>> = {
   Infinity: Number.POSITIVE_INFINITY,
 };
 
-/** What a function looks like to everything outside the interpreter (a log line, a command argument). */
-const FUNCTION_AS_TEXT = '[function]';
-
 /**
  * Interprets a script as a coroutine: it yields every timed action and can be
  * paused between two of them, which is what makes `step(n)` possible.
  */
-export function* interpret(program: Program, env: Environment): Generator<Action, void, unknown> {
+export function* interpret(
+  program: Program,
+  env: Environment,
+  limits: Limits,
+): Generator<Action, void, unknown> {
   type Coroutine<T> = Generator<Action, T, unknown>;
 
   /** Function declarations already made available at the start of their block. */
@@ -125,6 +125,13 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     return value;
   }
 
+  /** The key a member expression names: `o.x` names "x", `o[k]` names whatever `k` is. */
+  function* keyOf(node: MemberExpression, scope: Scope): Coroutine<unknown> {
+    if (node.optional) return unsupported(node, 'optional chaining');
+    if (node.computed) return yield* evaluate(node.property as Expression, scope);
+    return (node.property as { name: string }).name;
+  }
+
   function* evaluate(node: Expression, scope: Scope): Coroutine<unknown> {
     switch (node.type) {
       case 'ArrowFunctionExpression':
@@ -132,16 +139,58 @@ export function* interpret(program: Program, env: Environment): Generator<Action
         return makeFunction(node, scope);
       case 'Literal':
         return node.value;
+      case 'TemplateLiteral': {
+        let text = '';
+        for (const [index, quasi] of node.quasis.entries()) {
+          text += quasi.value.cooked ?? '';
+          const expression = node.expressions[index];
+          if (expression) text += stringify(yield* evaluate(expression, scope), lineOf(node), limits.collectionSize);
+        }
+        if (text.length > limits.collectionSize) throw tooBig('text', lineOf(node));
+        return text;
+      }
+      case 'ArrayExpression': {
+        if (node.elements.length > limits.collectionSize) throw tooBig('list', lineOf(node));
+        const items: unknown[] = [];
+        for (const element of node.elements) {
+          if (element === null) return unsupported(node, 'hole');
+          if (element.type === 'SpreadElement') return unsupported(element);
+          items.push(yield* evaluate(element, scope));
+        }
+        return items;
+      }
+      case 'ObjectExpression': {
+        const object = createObject();
+        for (const property of node.properties) {
+          if (property.type === 'SpreadElement') return unsupported(property);
+          if (property.computed) return unsupported(property, 'computed property name');
+          if (property.method || property.kind !== 'init') return unsupported(property, 'method');
+          const key =
+            property.key.type === 'Identifier'
+              ? property.key.name
+              : property.key.type === 'Literal'
+                ? String(property.key.value)
+                : unsupported(property.key);
+          const value = yield* evaluate(property.value as Expression, scope);
+          writeProperty(object, key, value, lineOf(property), limits.collectionSize);
+        }
+        return object;
+      }
       case 'Identifier':
         if (scope.find(node.name)) return lookup(node.name, scope, node).value;
         if (node.name in GLOBALS) return GLOBALS[node.name];
         throw new ScriptError(`${node.name} is not defined`, lineOf(node));
       case 'MemberExpression': {
-        if (node.object.type === 'Identifier' && !node.computed && node.property.type === 'Identifier') {
+        if (node.object.type === 'Identifier' && !node.computed && !scope.find(node.object.name)) {
           const group = env.constants[node.object.name];
-          if (group && node.property.name in group) return group[node.property.name];
+          if (group) {
+            const name = (node.property as { name: string }).name;
+            if (name in group) return group[name];
+            throw new ScriptError('Unknown value', lineOf(node));
+          }
         }
-        throw new ScriptError('Unknown value', lineOf(node));
+        const target = yield* evaluate(node.object as Expression, scope);
+        return readProperty(target, yield* keyOf(node, scope), lineOf(node));
       }
       case 'BinaryExpression': {
         const operation = BINARY[node.operator];
@@ -164,7 +213,7 @@ export function* interpret(program: Program, env: Environment): Generator<Action
       case 'AssignmentExpression':
         return yield* assign(node, scope);
       case 'UpdateExpression':
-        return applyUpdate(node, scope);
+        return yield* update(node, scope);
       case 'CallExpression':
         return yield* call(node, scope);
       default:
@@ -172,29 +221,47 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     }
   }
 
+  /** The variable, list item or property an assignment or an increment works on. */
+  function* targetOf(node: Node, scope: Scope): Coroutine<Target> {
+    if (node.type === 'Identifier') {
+      const { name } = node as Identifier;
+      return { get: () => lookup(name, scope, node).value, set: (value) => store(name, value, scope, node) };
+    }
+    if (node.type === 'MemberExpression') {
+      const member = node as MemberExpression;
+      const object = yield* evaluate(member.object as Expression, scope);
+      const key = yield* keyOf(member, scope);
+      return {
+        get: () => readProperty(object, key, lineOf(member)),
+        set: (value) => writeProperty(object, key, value, lineOf(member), limits.collectionSize),
+      };
+    }
+    return unsupported(node);
+  }
+
   function* assign(node: AssignmentExpression, scope: Scope): Coroutine<unknown> {
-    if (node.left.type !== 'Identifier') return unsupported(node.left);
+    const target = yield* targetOf(node.left, scope);
     const right = yield* evaluate(node.right, scope);
     let value = right;
     if (node.operator !== '=') {
       const operation = BINARY[node.operator.slice(0, -1)];
       if (!operation) return unsupported(node);
-      value = operation(lookup(node.left.name, scope, node).value, right);
+      value = operation(target.get(), right);
     }
-    store(node.left.name, value, scope, node);
+    target.set(value);
     return value;
   }
 
-  function applyUpdate(node: UpdateExpression, scope: Scope): unknown {
-    if (node.argument.type !== 'Identifier') return unsupported(node.argument);
-    const before = lookup(node.argument.name, scope, node).value as number;
+  function* update(node: UpdateExpression, scope: Scope): Coroutine<unknown> {
+    const target = yield* targetOf(node.argument, scope);
+    const before = target.get() as number;
     const after = node.operator === '++' ? before + 1 : before - 1;
-    store(node.argument.name, after, scope, node);
+    target.set(after);
     return node.prefix ? after : before;
   }
 
   function* invoke(fn: UserFunction, args: readonly unknown[], node: Node): Coroutine<unknown> {
-    if (depth >= MAX_CALL_DEPTH) throw new ScriptError('Maximum call depth exceeded', lineOf(node));
+    if (depth >= limits.callDepth) throw new ScriptError('Maximum call depth exceeded', lineOf(node));
     depth++;
     try {
       const local = new Scope(fn.scope);
@@ -213,12 +280,26 @@ export function* interpret(program: Program, env: Environment): Generator<Action
     const { callee } = node;
     let userFunction: UserFunction | undefined;
     let command: Command | undefined;
+    let listMethod: ((args: readonly unknown[]) => unknown) | undefined;
     if (callee.type === 'Identifier') {
       if (scope.find(callee.name)) {
         userFunction = requireFunction(lookup(callee.name, scope, node).value, callee.name, node);
       } else {
         command = env.commands[callee.name];
         if (!command) throw new ScriptError(`Unknown command: ${callee.name}`, lineOf(node));
+      }
+    } else if (callee.type === 'MemberExpression') {
+      const target = yield* evaluate(callee.object as Expression, scope);
+      const key = yield* keyOf(callee, scope);
+      const name = String(key);
+      const member = readProperty(target, key, lineOf(node));
+      if (member instanceof UserFunction) {
+        userFunction = member;
+      } else if (Array.isArray(target) && Object.hasOwn(LIST_METHODS, name)) {
+        const method = LIST_METHODS[name];
+        listMethod = (args) => method?.(target, args, limits.collectionSize, lineOf(node));
+      } else {
+        throw new ScriptError(`${name} is not a function`, lineOf(node));
       }
     } else if (callee.type === 'Super') {
       return unsupported(callee);
@@ -232,12 +313,13 @@ export function* interpret(program: Program, env: Environment): Generator<Action
       args.push(yield* evaluate(arg, scope));
     }
     if (userFunction) return yield* invoke(userFunction, args, node);
+    if (listMethod) return listMethod(args);
 
     if (!command) return unsupported(node);
     let action: Action;
     try {
       // Commands belong to the farm: they never get to see the interpreter's own objects.
-      action = command(args.map((arg) => (arg instanceof UserFunction ? FUNCTION_AS_TEXT : arg)));
+      action = command(args.map((arg) => exportValue(arg)));
     } catch (error) {
       throw new ScriptError((error as Error).message, lineOf(node));
     }

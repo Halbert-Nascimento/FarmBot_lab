@@ -38,9 +38,6 @@ describe('syntax the language does not have yet', () => {
     ['the conditional operator', 'log(true ? 1 : 2);', 'ConditionalExpression'],
     ['continue', 'for (let i = 0; i < 2; i++) { continue; }', 'ContinueStatement'],
     ['typeof', 'log(typeof 1);', 'UnaryExpression'],
-    ['a template string', 'log(`a`);', 'TemplateLiteral'],
-    ['an object', 'log({});', 'ObjectExpression'],
-    ['a list', 'log([]);', 'ArrayExpression'],
   ])('refuses %s, saying which syntax it is', (_label, source, node) => {
     expect((failure(source) as Error).message).toMatch(new RegExp(`Line 1: Unsupported syntax: ${node}`));
   });

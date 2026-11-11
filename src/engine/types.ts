@@ -1,4 +1,5 @@
 import type { Item } from './items';
+import type { Limits } from './limits';
 
 export type { Item };
 export type Terrain = 'grass' | 'tilled';
@@ -23,6 +24,8 @@ export interface FarmConfig {
   readonly width: number;
   readonly height: number;
   readonly seed: number;
+  /** Safety limits for the player's scripts. Any left out keeps its default. */
+  readonly limits?: Partial<Limits>;
 }
 
 export interface Position {
