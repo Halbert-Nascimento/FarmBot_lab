@@ -1,0 +1,31 @@
+# Vocabulário: glossário em português → identificadores em inglês
+
+Identificadores e comentários do código ficam em **inglês**. Documentação, glossário, ADRs e commits ficam em **português**. Esta tabela liga os termos de `GLOSSARY.md` aos nomes usados no código. Use sempre o identificador da tabela, sem sinônimos.
+
+| Termo (GLOSSARY.md) | Identificador |
+| --- | --- |
+| Fazenda | `Farm` |
+| Campo | `Field` |
+| Casa | `Cell` |
+| Terreno (Gramado, Terra arada) | `Terrain` (`grass`, `tilled`) |
+| Planta | `Plant` |
+| Drone | `Drone` |
+| Tick | `tick` |
+| Décimo de tick (unidade interna, ADR 0002) | `decitick` |
+| Script | `Script` |
+| Execução | `Run` |
+| Camada (de ensino) | `Layer` |
+| Ato | `Act` |
+| Missão | `Mission` |
+| Pesquisa | `Research` |
+| Evento de progressão | `ProgressionEvent` |
+| NÚCLEO (narrador) | `Nucleo` |
+| Fazenda principal | `MainFarm` |
+| Sandbox | `Sandbox` |
+| Modo livre | `FreeMode` |
+| Motor de simulação | pasta `src/engine/` |
+| Visualização | pasta `src/view/` |
+
+Comandos do jogador têm nome em inglês e em português (REQ-FND-41), definidos pelo GDD §9. Os nomes em inglês são os identificadores internos, e os nomes em português são apelidos.
+
+Se um conceito novo não estiver aqui, o termo entra primeiro no `GLOSSARY.md` e depois nesta tabela.
