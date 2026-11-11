@@ -58,6 +58,23 @@ describe('computing without a command', () => {
     expect(runWith(`${calculate}\n${calculate}`, { computeTicksWithoutCommand: 100 }).error).toBeInstanceOf(ScriptError);
   });
 
+  it('does not count a calculation such as x++ as progress', () => {
+    const { error } = runWith('let x = 0;\nwhile (true) {\n  x++;\n}', { computeTicksWithoutCommand: 100 });
+
+    expect((error as Error).message).toMatch(/Line 2: .*infinite loop/);
+  });
+
+  it.each([
+    ['move()', 'move(Dir.EAST);\nmove(Dir.WEST);'],
+    ['plant()', 'plant(Plant.GRASS);'],
+    ['wait()', 'wait(1);'],
+  ])('counts %s as progress inside a loop', (_label, body) => {
+    const { error, run } = runWith(`while (true) {\n  ${body}\n}`, { computeTicksWithoutCommand: 10 }, 500);
+
+    expect(error).toBeUndefined();
+    expect(run.isFinished).toBe(false);
+  });
+
   it('lets a loop that keeps giving commands run for as long as it is allowed to', () => {
     const { error, run } = runWith('while (true) {\n  wait(1);\n}', { computeTicksWithoutCommand: 10 }, 1000);
 
