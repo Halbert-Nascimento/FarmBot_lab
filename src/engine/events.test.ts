@@ -40,7 +40,12 @@ move(Dir.EAST);`);
 
     expect(run.isFinished).toBe(false);
 
+    // The action took 6 ticks, so the tick asked for next only pays part of that debt.
     run.step(1);
+
+    expect(run.isFinished).toBe(false);
+
+    run.step(10);
 
     expect(run.isFinished).toBe(true);
   });

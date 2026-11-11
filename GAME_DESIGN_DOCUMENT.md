@@ -465,7 +465,7 @@ Convenção: **nome em inglês / nome em português**, sempre ambos aceitos (REQ
 
 | Comando | Faz | Camada |
 |---|---|---|
-| `log(...)` / `anotar(...)` | Escreve no log com tempo | 1 |
+| `log(...)` / `registrar(...)` | Escreve no log com tempo | 1 |
 | `assert(cond, msg)` / `verificar(cond, msg)` | Interrompe se a condição falhar | 4 |
 | `random()` / `aleatorio()` | Número de 0 a 1 (usa a semente) | 5 |
 | `profile(label)` / `cronometrar(rotulo)` | Mede um trecho em ticks | 5 |

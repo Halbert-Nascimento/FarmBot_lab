@@ -85,7 +85,11 @@ export interface Meter {
 
 export interface Run {
   readonly isFinished: boolean;
-  /** Advances the simulation by at least `ticks` whole ticks, or until the script ends. */
+  /**
+   * Asks for `ticks` more whole ticks of simulation, or until the script ends. An action is never cut
+   * in half, so the clock may end a little past what was asked; the next call makes up for it. Asking
+   * for 100 ticks in one call or in a hundred calls leaves the farm in the very same state.
+   */
   step(ticks: number): void;
   getMeter(): Meter;
 }

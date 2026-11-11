@@ -68,6 +68,13 @@ export function createFarm(config: FarmConfig): Farm {
       }
       const script = interpret(program, env, limits);
       const startedAt = clock.deciticks;
+      /**
+       * Where the clock must get to, given every tick the view has asked for so far. An action is
+       * never cut in half, so the clock may end up a little past it; the next steps then start from
+       * the target, not from the clock. That is what makes the result the same however the view
+       * slices its steps (1x, 16x or all at once).
+       */
+      let target = startedAt;
       let finished = false;
       let lastResult: unknown;
       const guard = createProgressGuard(limits);
@@ -79,9 +86,9 @@ export function createFarm(config: FarmConfig): Farm {
           if (!Number.isInteger(ticks) || ticks < 0) {
             throw new RangeError('The step budget must be a non-negative whole number of ticks');
           }
-          const limit = clock.deciticks + ticks * DECITICKS_PER_TICK;
+          target += ticks * DECITICKS_PER_TICK;
           try {
-            while (!finished && clock.deciticks < limit) {
+            while (!finished && clock.deciticks < target) {
               const next = script.next(lastResult);
               if (next.done) {
                 finished = true;

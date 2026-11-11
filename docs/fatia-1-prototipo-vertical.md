@@ -46,6 +46,7 @@ A pessoa não participou do desenvolvimento, não conhece o jogo, tem familiarid
 Pontos pequenos que o GDD não fixava e que o motor adotou. Valem até o balanceamento ou a revisão em um ticket futuro.
 
 - Uma ação é atômica: cobra o custo e aplica o efeito. `step(n)` aceita só inteiros não negativos e pode ultrapassar o orçamento por no máximo uma ação.
+- **A velocidade não muda o resultado.** A execução guarda o total de ticks já pedidos (o alvo) e o relógio anda até alcançá-lo. O que uma ação passou do alvo é descontado dos pedidos seguintes. Por isso pedir 800 ticks de uma vez, em passos de 16 ou em 800 passos de 1 deixa a fazenda no mesmo estado, com os mesmos eventos e os mesmos carimbos de tempo. Antes dessa correção, um `step(1)` por quadro (1×) executava uma ação inteira por quadro e andava 8 vezes mais rápido que o pedido. O teste é `speeds.test.ts`: um consumidor imita a tela em 1×, 16× e instantâneo, lendo os eventos a cada quadro, só no fim ou nunca.
 - Uma ação age sobre o mundo **como ele estava no início dela**. Por isso colher uma planta que amadurece durante os 6 ticks da própria colheita ainda a destrói.
 - Bater na borda, plantar em lugar inválido e arar casa ocupada **gastam os ticks** e emitem um aviso (`bumped` ou `rejected`), sem alterar o mundo.
 - O crescimento de uma planta começa quando o plantio **termina** (depois dos 6 ticks). As regras de plantio (casa ocupada, terreno, estoque) são verificadas no fim da ação, o que é equivalente com um só drone e deve ser revisto no marco dos vários drones.
