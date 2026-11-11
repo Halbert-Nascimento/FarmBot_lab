@@ -181,6 +181,64 @@ describe('what looks like a locked feature but is not', () => {
   });
 });
 
+describe('a name the script declares', () => {
+  it('only hides a command of the same name where it is in scope', () => {
+    expect(lockedBy(attempt('{\n  let move = 1;\n  log(move);\n}\nmove(Dir.EAST);', 3).error)).toBe(false);
+  });
+
+  it('only hides a group of constants of the same name where it is in scope', () => {
+    expect(lockedBy(attempt('{\n  let Dir = 1;\n  log(Dir);\n}\nmove(Dir.EAST);', 3).error)).toBe(false);
+  });
+
+  it('does not hide them inside a function that has a parameter of that name', () => {
+    expect(attempt('function f(Dir) {\n  log(Dir.x);\n}', 9).error).toMatchObject({ code: 'layerLocked', params: { feature: 'propertyAccess' } });
+  });
+
+  it('makes a call to it a call to a function of the player, in the layer of functions', () => {
+    const { error } = attempt('function tend() {}\ntend();', 7);
+
+    expect(error).toMatchObject({ code: 'layerLocked', line: 1, params: { feature: 'function', layer: 8 } });
+    expect(lockedBy(attempt('function tend() {}\ntend();', 8).error)).toBe(false);
+  });
+
+  it('counts a loop variable as declared only inside its loop', () => {
+    expect(lockedBy(attempt('for (let move = 0; move < 2; move++) {\n  log(move);\n}\nmove(Dir.EAST);', 5).error)).toBe(false);
+  });
+});
+
+describe('a negative number', () => {
+  it('is a number written in the code, so the second layer already has it', () => {
+    expect(lockedBy(attempt('wait(-1);', 2).error)).toBe(false);
+    expect(lockedBy(attempt('wait(-1);', 1).error)).toBe(true);
+  });
+
+  it('is still refused as arithmetic when it is a subtraction', () => {
+    expect((attempt('log(1 - 1);', 2).error as ScriptError).params).toMatchObject({ feature: 'arithmetic', layer: 3 });
+  });
+});
+
+describe('syntax the layers do not know', () => {
+  // The layers only classify what the interpreter runs. These are refused by the interpreter itself, in every
+  // layer. If one of them is ever supported, it must get a layer in `SYNTAX_LAYERS` before it is released.
+  it.each([
+    ['the ternary operator', 'isReady() ? harvest() : move(Dir.EAST);'],
+    ['continue', 'for (let i = 0; i < 2; i++) {\n  continue;\n}'],
+    ['for...of', 'for (const a of getPos()) {\n  log(a);\n}'],
+    ['try', 'try {\n  harvest();\n} catch (e) {}'],
+    ['switch', 'switch (getPos()) {\n  default:\n    harvest();\n}'],
+  ])('are refused by the interpreter even with every layer unlocked: %s', (_name, source) => {
+    expect(attempt(source).error).toMatchObject({ code: 'unsupported' });
+  });
+});
+
+describe('a loop inside a function that is called from a loop', () => {
+  it('is not counted as nested, because the layers look at how the code is written, not at how it runs', () => {
+    const source = 'function sweep() {\n  for (let i = 0; i < 2; i++) {\n    harvest();\n  }\n}\nfor (let j = 0; j < 2; j++) {\n  sweep();\n}';
+
+    expect(lockedBy(attempt(source, 8).error)).toBe(false);
+  });
+});
+
 describe('the message', () => {
   it('names the feature, the layer that unlocks it and the layer name, in English', () => {
     const { error } = attempt('for (let i = 0; i < 3; i++) {}', 4, 'en');

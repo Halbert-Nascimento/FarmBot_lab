@@ -77,8 +77,12 @@ Pontos pequenos que o GDD não fixava e que o motor adotou. Valem até o balance
 | 9. Listas | `[...]`, índice, `length`, `push`, `pop` |
 | 10. Objetos e estado | `{...}`, propriedades (`a.b`) |
 
-- **Interpretação:** constantes como `Dir.EAST` valem desde a camada 1; números e textos literais só na 2. Uma chamada a um nome que o próprio script declara conta como chamada de função própria (camada 8); qualquer outro nome é um comando.
-- **Lacuna conhecida, temporária:** o **bloqueio de comandos por camada** (REQ-API-05: por exemplo `till` na camada 2 e `wait` na 3) **ainda não existe**. Hoje, com `layer: 1`, `till()` funciona e `wait(3)` só é recusado por causa do número `3`. Enquanto esse bloqueio não existir, a progressão por camadas **não está completa**. O trabalho está registrado numa issue própria.
+- **Interpretação:**
+  - Constantes como `Dir.EAST` valem desde a camada 1; números e textos literais só na 2. Um número negativo escrito no código (`-1`) é um número literal, não uma subtração.
+  - Uma chamada a um nome que o próprio script declara conta como chamada de função própria (camada 8); qualquer outro nome é um comando. A declaração só esconde um comando ou um grupo de constantes (`Dir`) do mesmo nome **onde está em escopo**, como o interpretador resolve os nomes.
+  - **Laço dentro de laço é pelo jeito que o código está escrito**, não pelo jeito que roda: um laço dentro de uma função conta como o primeiro laço da função, mesmo que a função seja chamada de dentro de outro laço. Na prática, para escrever funções o jogador já passou pela camada 8, depois da 7.
+  - A análise só classifica o que o interpretador executa. O que ele não executa (operador ternário, `continue`, `for...of`, `try`, `switch`) é recusado pelo próprio interpretador em qualquer camada, e um teste fixa isso: se um deles passar a ser executado, precisa ganhar uma camada em `SYNTAX_LAYERS` antes de ser liberado.
+- **Lacuna conhecida, temporária:** o **bloqueio de comandos por camada** (REQ-API-05: por exemplo `till` na camada 2 e `wait` na 3) **ainda não existe**. Hoje, com `layer: 1`, `till()` funciona e `wait(3)` só é recusado por causa do número `3`. Enquanto esse bloqueio não existir, a progressão por camadas **não está completa**. O trabalho está registrado na issue #16.
 
 ## Bilíngue e mensagens de erro (issue #7)
 

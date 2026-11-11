@@ -99,8 +99,12 @@ Um teto que impede um script de travar o jogo ou esgotar a máquina: ticks de c�
 _Avoid_: quota, restrição
 
 **Camada**:
-Cada um dos dez degraus de ensino de JavaScript (1 a 10). Uma camada libera comandos e sintaxe.
+Cada um dos dez degraus de ensino de JavaScript (1 a 10). Uma camada libera comandos e sintaxe, e libera também tudo o que as camadas anteriores liberam.
 _Avoid_: nível, fase, módulo
+
+**Recurso de sintaxe**:
+Uma peça da linguagem que uma camada libera, como `for`, `while`, `function`, listas ou objetos. O motor reconhece o recurso pela estrutura do código, nunca pelo texto, e recusa o script inteiro, antes de executar, se ele usar um recurso de camada ainda não liberada.
+_Avoid_: funcionalidade, palavra-chave, construção
 
 ## Progressão
 

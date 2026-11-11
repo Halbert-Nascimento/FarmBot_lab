@@ -29,7 +29,8 @@ Identificadores e comentários do código ficam em **inglês**. Documentação, 
 | Medidor de execução | `Meter` |
 | Evento da fazenda | `FarmEvent` |
 | Posição de uma casa | `Position` |
-| Camada (de ensino) | `Layer` |
+| Camada (de ensino) | `Layer` (`FarmConfig.layer`, `LAYER_COUNT`) |
+| Recurso de sintaxe | `SyntaxFeature`, com a camada de cada um em `SYNTAX_LAYERS` |
 | Ato | `Act` |
 | Missão | `Mission` |
 | Pesquisa | `Research` |
