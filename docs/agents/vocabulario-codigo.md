@@ -8,12 +8,17 @@ Identificadores e comentários do código ficam em **inglês**. Documentação, 
 | Campo | `Field` |
 | Casa | `Cell` |
 | Terreno (Gramado, Terra arada) | `Terrain` (`grass`, `tilled`) |
-| Planta | `Plant` |
+| Planta | `PlantSpecies` (tipo) e `Plant` (constante do script, ex.: `Plant.GRASS`) |
 | Drone | `Drone` |
 | Tick | `tick` |
 | Décimo de tick (unidade interna, ADR 0002) | `decitick` |
 | Script | `Script` |
 | Execução | `Run` |
+| Comando | `Command` |
+| Ação | `Action` |
+| Medidor de execução | `Meter` |
+| Evento da fazenda | `FarmEvent` |
+| Posição de uma casa | `Position` |
 | Camada (de ensino) | `Layer` |
 | Ato | `Act` |
 | Missão | `Mission` |

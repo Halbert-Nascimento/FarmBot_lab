@@ -74,7 +74,13 @@ export function* interpret(program: Program, env: Environment): Generator<Action
       if (arg.type === 'SpreadElement') throw new ScriptError('Unsupported syntax: SpreadElement', lineOf(arg));
       args.push(yield* evaluate(arg));
     }
-    yield command(args);
+    let action: Action;
+    try {
+      action = command(args);
+    } catch (error) {
+      throw new ScriptError((error as Error).message, lineOf(node));
+    }
+    yield action;
     return undefined;
   }
 

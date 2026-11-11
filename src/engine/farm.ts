@@ -1,4 +1,4 @@
-import { createClock } from './clock';
+import { createClock, DECITICKS_PER_TICK, formatTicks } from './clock';
 import { hashString } from './hash';
 import { interpret, parseScript } from './interpreter';
 import type { Action, Environment } from './interpreter';
@@ -39,13 +39,16 @@ export type FarmEvent =
   | { readonly type: 'moved'; readonly tick: number; readonly from: Position; readonly to: Position }
   | { readonly type: 'bumped'; readonly tick: number; readonly at: Position };
 
-type EmittableEvent = FarmEvent extends infer E ? (E extends FarmEvent ? Omit<E, 'tick'> : never) : never;
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+type EmittableEvent = DistributiveOmit<FarmEvent, 'tick'>;
 
 export interface Meter {
   /** Time spent by the run, in deciticks (integer). */
   readonly deciticks: number;
   /** Time spent by the run, in ticks (one decimal at most). */
   readonly ticks: number;
+  /** Time spent by the run, as text with exactly one decimal place, e.g. "6.0". */
+  readonly formatted: string;
 }
 
 export interface Run {
@@ -68,12 +71,22 @@ export interface Farm {
 /** Command costs in deciticks (GDD 5.2, ADR 0002). */
 const COST = { move: 80, plant: 60, harvest: 60 } as const;
 
+const PLANT_SPECIES: readonly PlantSpecies[] = ['grass'];
+
 const DIRECTIONS = {
   NORTH: { x: 0, y: -1 },
   EAST: { x: 1, y: 0 },
   SOUTH: { x: 0, y: 1 },
   WEST: { x: -1, y: 0 },
 } as const;
+
+function isDirection(value: unknown): value is Position {
+  return Object.values(DIRECTIONS).some((direction) => direction === value);
+}
+
+function isPlantSpecies(value: unknown): value is PlantSpecies {
+  return PLANT_SPECIES.some((species) => species === value);
+}
 
 export function createFarm(config: FarmConfig): Farm {
   const cells: Cell[] = Array.from({ length: config.width * config.height }, () => ({
@@ -97,46 +110,56 @@ export function createFarm(config: FarmConfig): Farm {
   const env: Environment = {
     constants: { Plant: { GRASS: 'grass' }, Dir: DIRECTIONS },
     commands: {
-      move: ([direction]): Action => ({
-        deciticks: COST.move,
-        apply() {
-          const step = direction as Position;
-          const next = { x: drone.x + step.x, y: drone.y + step.y };
-          const inside = next.x >= 0 && next.x < config.width && next.y >= 0 && next.y < config.height;
-          if (inside) {
-            emit({ type: 'moved', from: drone, to: next });
-            drone = next;
-          } else {
-            emit({ type: 'bumped', at: drone });
-          }
-        },
-      }),
-      harvest: (): Action => ({
-        deciticks: COST.harvest,
-        apply() {
-          const cell = cellAtDrone();
-          if (cell?.plant) {
-            cell.plant = null;
-            emit({ type: 'harvested', at: drone });
-          }
-        },
-      }),
-      plant: ([species]): Action => ({
-        deciticks: COST.plant,
-        apply() {
-          const cell = cellAtDrone();
-          if (cell) {
-            cell.plant = species as PlantSpecies;
-            emit({ type: 'planted', at: drone, species: species as PlantSpecies });
-          }
-        },
-      }),
+      move: (args): Action => {
+        const [direction] = args;
+        if (args.length !== 1 || !isDirection(direction)) throw new Error('move expects a direction');
+        return {
+          deciticks: COST.move,
+          apply() {
+            const next = { x: drone.x + direction.x, y: drone.y + direction.y };
+            const inside = next.x >= 0 && next.x < config.width && next.y >= 0 && next.y < config.height;
+            if (inside) {
+              emit({ type: 'moved', from: drone, to: next });
+              drone = next;
+            } else {
+              emit({ type: 'bumped', at: drone });
+            }
+          },
+        };
+      },
+      harvest: (args): Action => {
+        if (args.length !== 0) throw new Error('harvest takes no arguments');
+        return {
+          deciticks: COST.harvest,
+          apply() {
+            const cell = cellAtDrone();
+            if (cell?.plant) {
+              cell.plant = null;
+              emit({ type: 'harvested', at: drone });
+            }
+          },
+        };
+      },
+      plant: (args): Action => {
+        const [species] = args;
+        if (args.length !== 1 || !isPlantSpecies(species)) throw new Error('plant expects a plant species');
+        return {
+          deciticks: COST.plant,
+          apply() {
+            const cell = cellAtDrone();
+            if (cell && cell.plant === null) {
+              cell.plant = species;
+              emit({ type: 'planted', at: drone, species });
+            }
+          },
+        };
+      },
     },
   };
 
   return {
-    getState: () => snapshot(),
-    getStateHash: () => hashString(JSON.stringify([clock.deciticks, drone.x, drone.y, cells.map((c) => [c.terrain, c.plant])])),
+    getState: snapshot,
+    getStateHash: () => hashString(JSON.stringify([config.seed, clock.deciticks, drone.x, drone.y, cells.map((c) => [c.terrain, c.plant])])),
     drainEvents() {
       const drained = events;
       events = [];
@@ -151,20 +174,28 @@ export function createFarm(config: FarmConfig): Farm {
           return finished;
         },
         step(ticks) {
-          const limit = clock.deciticks + ticks * 10;
-          while (!finished && clock.deciticks < limit) {
-            const next = script.next();
-            if (next.done) {
-              finished = true;
-              break;
+          if (!Number.isInteger(ticks) || ticks < 0) {
+            throw new RangeError('The step budget must be a non-negative whole number of ticks');
+          }
+          const limit = clock.deciticks + ticks * DECITICKS_PER_TICK;
+          try {
+            while (!finished && clock.deciticks < limit) {
+              const next = script.next();
+              if (next.done) {
+                finished = true;
+                break;
+              }
+              clock.charge(next.value.deciticks);
+              next.value.apply();
             }
-            clock.charge(next.value.deciticks);
-            next.value.apply();
+          } catch (error) {
+            finished = true;
+            throw error;
           }
         },
         getMeter() {
           const deciticks = clock.deciticks - startedAt;
-          return { deciticks, ticks: deciticks / 10 };
+          return { deciticks, ticks: deciticks / DECITICKS_PER_TICK, formatted: formatTicks(deciticks) };
         },
       };
     },

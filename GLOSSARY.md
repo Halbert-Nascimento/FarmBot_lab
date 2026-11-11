@@ -42,6 +42,22 @@ _Avoid_: código (quando se fala de um programa específico), macro
 Uma rodada de um script na fazenda, do início ao fim ou à interrupção.
 _Avoid_: run, partida
 
+**Comando**:
+Uma função do jogo que o script chama para agir (mover, plantar, colher) ou para ler a fazenda (sensores).
+_Avoid_: instrução, função nativa, API (como nome do conceito)
+
+**Ação**:
+Uma operação do drone que consome ticks e muda a fazenda.
+_Avoid_: tarefa, passo
+
+**Medidor de execução**:
+O resumo do custo de uma execução, em ticks com uma casa decimal.
+_Avoid_: contador, cronômetro
+
+**Evento da fazenda**:
+O registro de uma mudança de estado da fazenda, emitido pelo motor de simulação e consumido pela visualização.
+_Avoid_: notificação, mensagem
+
 **Camada**:
 Cada um dos dez degraus de ensino de JavaScript (1 a 10). Uma camada libera comandos e sintaxe.
 _Avoid_: nível, fase, módulo
