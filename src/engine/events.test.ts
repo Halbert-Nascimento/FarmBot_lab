@@ -58,7 +58,7 @@ harvest();`).step(100);
 
     expect(farm.drainEvents()).toEqual([
       { type: 'planted', timeDeciticks: 60, at: { x: 0, y: 0 }, species: 'grass' },
-      { type: 'harvested', timeDeciticks: 120, at: { x: 0, y: 0 } },
+      { type: 'destroyed', timeDeciticks: 120, at: { x: 0, y: 0 }, species: 'grass' },
       { type: 'moved', timeDeciticks: 200, from: { x: 0, y: 0 }, to: { x: 1, y: 0 } },
       { type: 'bumped', timeDeciticks: 280, at: { x: 1, y: 0 } },
     ]);

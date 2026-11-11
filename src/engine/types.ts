@@ -1,9 +1,20 @@
 export type Terrain = 'grass' | 'tilled';
 export type PlantSpecies = 'grass';
+export type Item = 'hay' | 'wheat';
+export type GrowthStage = 'sprout' | 'growing' | 'ready';
+
+/** A planted plant as seen from outside: its species, growth stage and progress (0 to 100). */
+export interface PlantState {
+  readonly species: PlantSpecies;
+  readonly stage: GrowthStage;
+  readonly progress: number;
+}
+
+export type Stock = Readonly<Record<Item, number>>;
 
 export interface Cell {
   readonly terrain: Terrain;
-  readonly plant: PlantSpecies | null;
+  readonly plant: PlantState | null;
 }
 
 export interface FarmConfig {
@@ -20,6 +31,7 @@ export interface Position {
 export interface FarmState {
   readonly tick: number;
   readonly drone: Position;
+  readonly stock: Stock;
   readonly field: {
     readonly width: number;
     readonly height: number;
@@ -30,7 +42,15 @@ export interface FarmState {
 /** A change of farm state, stamped with the exact time (in deciticks) at which the action completed. */
 export type FarmEvent =
   | { readonly type: 'planted'; readonly timeDeciticks: number; readonly at: Position; readonly species: PlantSpecies }
-  | { readonly type: 'harvested'; readonly timeDeciticks: number; readonly at: Position }
+  | {
+      readonly type: 'harvested';
+      readonly timeDeciticks: number;
+      readonly at: Position;
+      readonly species: PlantSpecies;
+      readonly item: Item;
+      readonly quantity: number;
+    }
+  | { readonly type: 'destroyed'; readonly timeDeciticks: number; readonly at: Position; readonly species: PlantSpecies }
   | { readonly type: 'moved'; readonly timeDeciticks: number; readonly from: Position; readonly to: Position }
   | { readonly type: 'bumped'; readonly timeDeciticks: number; readonly at: Position };
 

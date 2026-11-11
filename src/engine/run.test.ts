@@ -13,7 +13,7 @@ describe('running a script', () => {
     run.step(100);
 
     expect(run.isFinished).toBe(true);
-    expect(farm.getState().field.cells[0]?.plant).toBe('grass');
+    expect(farm.getState().field.cells[0]?.plant?.species).toBe('grass');
     expect(run.getMeter().deciticks).toBe(60);
     expect(run.getMeter().ticks).toBe(6);
     expect(farm.getState().tick).toBe(6);
@@ -40,7 +40,7 @@ move(Dir.WEST);`);
     expect(run.getMeter().ticks).toBe(16);
   });
 
-  it('harvests the plant of the drone cell and charges the harvest cost', () => {
+  it('removes the plant of the drone cell on harvest and charges the harvest cost', () => {
     const farm = newFarm();
 
     const run = farm.run(`plant(Plant.GRASS);
@@ -58,7 +58,7 @@ harvest();`);
 plant(Plant.GRASS);`);
     run.step(100);
 
-    expect(farm.getState().field.cells[0]?.plant).toBe('grass');
+    expect(farm.getState().field.cells[0]?.plant?.species).toBe('grass');
     expect(run.getMeter().ticks).toBe(12);
   });
 });

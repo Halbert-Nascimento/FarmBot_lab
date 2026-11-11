@@ -1,4 +1,6 @@
+import { DECITICKS_PER_TICK } from './clock';
 import type { Action, Environment } from './interpreter';
+import { PLANTS, plantState } from './plants';
 import type { PlantSpecies, Position } from './types';
 import type { World } from './world';
 
@@ -46,14 +48,29 @@ export function createEnvironment(world: World): Environment {
         if (args.length !== 0) throw new Error('harvest takes no arguments');
         return {
           deciticks: COST.harvest,
-          apply() {
+          apply(startedAt) {
             const cell = world.cellAtDrone();
             if (cell?.plant) {
+              const { species } = cell.plant;
+              const ripe = plantState(cell.plant, startedAt).stage === 'ready';
               cell.plant = null;
-              world.emit({ type: 'harvested', at: world.drone });
+              if (ripe) {
+                const { item, quantity } = PLANTS[species].yield;
+                world.stock[item] += quantity;
+                world.emit({ type: 'harvested', at: world.drone, species, item, quantity });
+              } else {
+                world.emit({ type: 'destroyed', at: world.drone, species });
+              }
             }
           },
         };
+      },
+      wait: (args): Action => {
+        const [ticks] = args;
+        if (args.length !== 1 || typeof ticks !== 'number' || !Number.isInteger(ticks) || ticks < 0) {
+          throw new Error('wait expects a whole number of ticks');
+        }
+        return { deciticks: ticks * DECITICKS_PER_TICK, apply() {} };
       },
       plant: (args): Action => {
         const [species] = args;
@@ -63,7 +80,7 @@ export function createEnvironment(world: World): Environment {
           apply() {
             const cell = world.cellAtDrone();
             if (cell && cell.plant === null) {
-              cell.plant = species;
+              cell.plant = { species, plantedAt: world.clock.deciticks };
               world.emit({ type: 'planted', at: world.drone, species });
             }
           },

@@ -5,8 +5,11 @@ import type { CallExpression, Expression, Node, Program } from 'acorn';
 export interface Action {
   /** Cost in deciticks. */
   readonly deciticks: number;
-  /** Applies the effect once the cost has been charged. */
-  apply(): void;
+  /**
+   * Applies the effect once the cost has been charged. `startedAt` is the world time (in
+   * deciticks) when the action began: actions act on the world as it was at that moment.
+   */
+  apply(startedAt: number): void;
 }
 
 export type Command = (args: readonly unknown[]) => Action;

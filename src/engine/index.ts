@@ -5,10 +5,14 @@ export type {
   FarmConfig,
   FarmEvent,
   FarmState,
+  GrowthStage,
+  Item,
   Meter,
   PlantSpecies,
+  PlantState,
   Position,
   Run,
+  Stock,
   Terrain,
 } from './types';
 export { ScriptError } from './interpreter';

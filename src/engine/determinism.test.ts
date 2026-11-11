@@ -30,7 +30,7 @@ describe('state snapshot', () => {
     const farm = createFarm(config);
 
     const snapshot = farm.getState();
-    (snapshot.field.cells[0] as { plant: string | null }).plant = 'grass';
+    (snapshot.field.cells[0] as { plant: unknown }).plant = { species: 'grass', stage: 'ready', progress: 100 };
 
     expect(farm.getState().field.cells[0]?.plant).toBeNull();
   });
