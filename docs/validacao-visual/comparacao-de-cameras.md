@@ -104,7 +104,7 @@ Tudo aqui é **leitura das imagens** `marco-5-*-iso35-26.png`, e pode ser contes
 - Se seguir o drone ajuda ou atrapalha **quando ele se move rápido** (16× e instantâneo): as capturas de seguir foram feitas com a simulação pausada.
 - Girar a perspectiva pode deixar parte do campo fora da tela: o enquadramento é calculado só para o ângulo inicial. Não há botão para voltar à orientação inicial, e não há captura disso.
 - Uma pessoa de fora usando cada câmera: é o teste do #15.
-- A isométrica clássica de 45°: só disponível pelo endereço.
+- Disponibilidade na interface: a isométrica clássica (giro de 45° e elevação de 35,26°) não tem controle na interface; só pode ser ativada pelo endereço. Sua aparência foi registrada nos quatro cenários listados acima, mas não houve teste de uso por uma pessoa.
 - Em campo pequeno (3×2), o zoom máximo deixa as plantas enormes e mostra menos de uma casa (`3x2-zoom3-segue`).
 
 ## Decisões que ficam para o #14
