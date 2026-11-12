@@ -3,14 +3,14 @@
 //   pnpm dev            (in another terminal)
 //   node scripts/capture.mjs <milestone> <output folder> [address]
 //
-// milestone: 1 (structure), 2 (integration), 3 (scale) or 4 (the interface: editor, console, buttons) or 5 (the two cameras, the stress field). It saves screenshots and a console log in the folder.
+// milestone: 1 (structure), 2 (integration), 3 (scale) or 4 (the interface: editor, console, buttons) or 5 (the two cameras, the stress field) or 6 (the alternative isometric angle, 45 and 35.26 degrees). It saves screenshots and a console log in the folder.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
 
 const [milestone, outDir, address = 'http://localhost:5173'] = process.argv.slice(2);
 if (!milestone || !outDir) {
-  console.error('usage: node scripts/capture.mjs <1|2|3|4|5> <output folder> [address]');
+  console.error('usage: node scripts/capture.mjs <1|2|3|4|5|6> <output folder> [address]');
   process.exit(1);
 }
 mkdirSync(outDir, { recursive: true });
@@ -343,6 +343,32 @@ if (milestone === '5') {
   await page.keyboard.up('c');
   note(`[tecla C segurada] camera: ${(await camera()).kind} (esperado: isometric, uma troca so)`);
   note(`[hash do 32x32 do marco 5 (varredura real, ${ticks32} ticks)] ${hash32}`);
+}
+
+if (milestone === '6') {
+  // The alternative isometric angle (45 degrees of turn, 35.26 of elevation), only to see how it looks. It is a test
+  // setting, not the default (which is 0 and 50). Same scenes as milestone 5, isometric camera only.
+  const farmbot = (name, ...args) => page.evaluate(([method, rest]) => window.__farmbot[method](...rest), [name, args]);
+  const angle = 'isoyaw=45&isopitch=35.26&lang=pt-BR';
+  const scene = async (name, query, ticks, zoom, settleMs) => {
+    await open(`${angle}&${query}&autorun=1&paused=1`);
+    await farmbot('advanceTicks', ticks);
+    if ((await farmbot('camera')).kind !== 'isometric') {
+      await page.click('.topbar h1');
+      await page.keyboard.press('c');
+      await page.waitForTimeout(150);
+    }
+    await farmbot('setZoom', zoom);
+    await farmbot('setFollow', zoom > 1);
+    await shot(`marco-5-${name}-iso35-26`, settleMs);
+    const c = await farmbot('camera');
+    note(`[camera] ${name}: ${c.kind}, zoom ${c.zoom.toFixed(2)}, segue ${c.follow}, alvo (${c.targetX.toFixed(1)}, ${c.targetZ.toFixed(1)})`);
+  };
+  note(`[renderer] ${await (async () => { await open(`${angle}&w=3&h=2`); return renderer(); })()}`);
+  await scene('3x2-zoom1', 'w=3&h=2&demo=garden', 380, 1, 900);
+  await scene('3x2-zoom3-segue', 'w=3&h=2&demo=garden', 380, 3, 3200);
+  await scene('32x32-zoom1', 'w=32&h=32&demo=sweep', 7000, 1, 900);
+  await scene('32x32-zoom5-segue', 'w=32&h=32&demo=sweep', 7000, 5, 3200);
 }
 
 writeFileSync(join(outDir, `console-marco-${milestone}.log`), `${log.join('\n')}\n`);
