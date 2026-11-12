@@ -2,7 +2,12 @@
 
 Material para a decisão do ticket #14 e para o teste do #15. **Este documento não escolhe uma câmera.** Ele reúne o que cada uma mostrou, com as capturas e as medidas, e diz o que não foi medido.
 
-As capturas são `marco-5-*.png` nesta pasta (`pnpm capture 5 docs/validacao-visual`, com `pnpm dev` rodando). O log, com todas as medidas citadas aqui, é `console-marco-5.log`. O que não vem do log nem de uma captura citada está marcado como **leitura das imagens** e pode ser contestado.
+### Fontes: o que está no repositório e o que é local
+
+- **Versionado (está no repositório):** as capturas `marco-5-*.png` nesta pasta (as de 50° e as `iso35-26`), o código, os testes, o script `scripts/capture.mjs` e este documento.
+- **Arquivo local, não versionado:** `console-marco-5.log` e `console-marco-6.log`. Ficam ignorados pelo `.gitignore` (`*.log`) e só existem na máquina onde a captura rodou.
+- **Atribuição das medidas:** os quadros por segundo, as chamadas de desenho, os triângulos, o alvo da câmera, os ângulos do mouse, os hashes e os ticks citados abaixo vêm desses logs locais. Quem lê só o repositório **não consegue conferi-los**: precisa reproduzi-los com `pnpm dev` rodando e, em outro terminal, `pnpm capture 5 docs/validacao-visual` (câmeras, estresse, mouse) e `pnpm capture 6 docs/validacao-visual` (isométrica 35,26°). Os números podem variar um pouco entre execuções.
+- O que não vem de um log nem de uma captura citada está marcado como **leitura das imagens** e pode ser contestado.
 
 ## Como a comparação foi montada
 
@@ -32,7 +37,7 @@ As capturas são `marco-5-*.png` nesta pasta (`pnpm capture 5 docs/validacao-vis
 | Estresse em zoom 5 | `marco-5-estresse-zoom5-persp.png` | `marco-5-estresse-zoom5-iso.png` | (sem captura) |
 | Perspectiva girada e movida com o mouse | `marco-5-mouse-persp-girada-e-movida.png` | (a isométrica não gira nem move) | (idem) |
 
-As capturas em 35,26° são do mesmo conteúdo (mesmos ticks, mesmo drone) e saíram no mesmo log, `console-marco-6.log`. Elas **permitem ver a aparência** nesse ângulo; **não substituem** uma avaliação de uso.
+As capturas em 35,26° são do mesmo conteúdo (mesmos ticks, mesmo drone) e o log delas é `console-marco-6.log` (arquivo local, não versionado). Elas **permitem ver a aparência** nesse ângulo; **não substituem** uma avaliação de uso.
 
 ## Medidas do modo de estresse
 
@@ -66,10 +71,15 @@ A coluna "Isométrica" desta tabela é a **de 50° (padrão)**. O 35,26° não e
 
 Tudo aqui é **leitura das imagens** `marco-5-*-iso35-26.png`, e pode ser contestado. O ângulo foi aplicado: o campo aparece em diagonal, com o losango de ponta a ponta.
 
+**Cobertura:** estas observações valem **só para os quatro cenários capturados** (3×2 em zoom 1 e zoom 3 seguindo; 32×32 em zoom 1 e zoom 5 seguindo). Não se estendem ao 16×16, ao modo de estresse, ao zoom 5 sem seguir nem a outros tamanhos de campo.
+
+**Referência espacial:** o giro de 45° muda a posição visual do norte e do leste. As outras configurações comparadas (perspectiva e isométrica 50°) preservam a referência combinada, com o norte ao fundo e o leste à direita. A isométrica 35,26° não preserva.
+
 - **32×32 inteiro:** o campo vira um losango que ocupa cerca de 570 px de largura, com a mesma escala em toda a altura. Os cantos do campo ficam nos quatro pontos do losango. As fileiras de solo arado correm na diagonal.
 - **32×32 em zoom 5, seguindo:** o alvo parou em (12,8; −3,5), o mesmo da isométrica 50°. Na captura, o drone (translúcido, com o anel azul) fica perto do canto inferior direito e aparece uma faixa de céu além da borda do campo; as fileiras de plantas se leem na diagonal.
 - **3×2 em zoom 3:** o trigo aparece de lado e o drone translúcido deixa vê-lo; o painel de botões da câmera cobre parte do canto superior esquerdo da cena, onde estão a nuvem do drone e as espigas mais altas.
 - **Orientação:** com giro de 45°, norte e leste ficam nas diagonais da tela, não mais ao fundo e à direita. As outras duas câmeras e o texto da ajuda não foram feitos para esse referencial.
+- **Problemas visuais reais, ambos nas capturas acima:** o painel de botões da câmera cobre o drone e as espigas no 3×2 em zoom 3, e há uma faixa de céu além da borda do campo no 32×32 em zoom 5.
 
 ## Ressalvas
 
