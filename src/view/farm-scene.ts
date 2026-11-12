@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { FarmEvent, FarmState, GrowthStage, Item, PlantSpecies, Position, Terrain } from '../engine';
 import { bake, DEFAULT_MODELS } from './models';
+import type { MadePlant } from './stress';
 import type { PlantModels } from './models';
 
 /**
@@ -55,6 +56,11 @@ export class FarmScene {
   private readonly particleMaterials = new Map<number, THREE.MeshBasicMaterial>();
   private readonly drone = new THREE.Group();
   private readonly rotors: THREE.Mesh[] = [];
+  /** Every part of the drone, to make it see-through when it is over a plant. */
+  private readonly droneMaterials: THREE.MeshLambertMaterial[] = [];
+  private droneOpacity = 1;
+  /** Plants that are only drawn (the stress field). They are not on the farm and the engine knows nothing of them. */
+  private readonly madePlants = new Map<number, THREE.Mesh>();
   /** A ring on the ground under the drone: on a big field the drone alone is a speck. */
   private readonly marker: THREE.Mesh;
   private readonly droneScale: number;
@@ -127,8 +133,13 @@ export class FarmScene {
   }
 
   private buildDrone(): void {
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.34), new THREE.MeshLambertMaterial({ color: 0xe8eef4 }));
-    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, 0.04), new THREE.MeshLambertMaterial({ color: 0x1d6fd6 }));
+    const solid = (color: number): THREE.MeshLambertMaterial => {
+      const made = new THREE.MeshLambertMaterial({ color, transparent: true });
+      this.droneMaterials.push(made);
+      return made;
+    };
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.34), solid(0xe8eef4));
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, 0.04), solid(0x1d6fd6));
     eye.position.set(0, 0, 0.18);
     this.drone.add(body, eye);
     for (const [x, z] of [
@@ -137,12 +148,9 @@ export class FarmScene {
       [-0.22, 0.22],
       [0.22, 0.22],
     ] as const) {
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.05), new THREE.MeshLambertMaterial({ color: 0x9aa7b4 }));
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.05), solid(0x9aa7b4));
       arm.position.set(x * 0.7, 0.02, z * 0.7);
-      const rotor = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.11, 0.11, 0.015, 12),
-        new THREE.MeshLambertMaterial({ color: 0x3a4652 }),
-      );
+      const rotor = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.015, 12), solid(0x3a4652));
       rotor.position.set(x, 0.07, z);
       this.rotors.push(rotor);
       this.drone.add(arm, rotor);
@@ -259,6 +267,12 @@ export class FarmScene {
     this.marker.position.set(this.dronePosition.x, 0.03, this.dronePosition.z);
     for (const rotor of this.rotors) rotor.rotation.y += seconds * 40;
 
+    // Over a plant (a real one or a made-up one) the drone turns see-through, so the plant can be seen.
+    const cell = this.indexOf(this.droneTarget);
+    const covered = this.plantViews.has(cell) || this.madePlants.has(cell);
+    this.droneOpacity += ((covered ? 0.4 : 1) - this.droneOpacity) * (1 - Math.exp(-seconds * 10));
+    for (const material of this.droneMaterials) material.opacity = this.droneOpacity;
+
     for (const view of this.plantViews.values()) {
       if (view.age === null) continue;
       view.age += seconds;
@@ -297,13 +311,47 @@ export class FarmScene {
   }
 
   /** How many things are on screen, for the performance checks. */
-  stats(): { plants: number; particles: number; objects: number; droneScale: number } {
+  stats(): { plants: number; madeUpPlants: number; particles: number; objects: number; droneScale: number; droneOpacity: number } {
     return {
       plants: this.plantViews.size,
+      madeUpPlants: this.madePlants.size,
+      droneOpacity: this.droneOpacity,
       particles: this.particles.length,
       objects: this.root.children.length,
       droneScale: this.droneScale,
     };
+  }
+
+  /** Where the drone is in the scene, as it glides: for a camera that follows it. */
+  droneWorld(): { x: number; z: number } {
+    return { x: this.dronePosition.x, z: this.dronePosition.z };
+  }
+
+  /**
+   * Draws plants that are NOT on the farm (the stress field), one for every cell. The engine never hears
+   * of them. Wheat gets tilled soil under it, like on the real farm. They stay until `clearMadeUpPlants`.
+   */
+  showMadeUpPlants(plants: readonly (MadePlant | null)[]): void {
+    if (plants.length !== this.width * this.height) throw new Error('The pattern and the scene have different fields');
+    this.clearMadeUpPlants();
+    plants.forEach((plant, index) => {
+      if (!plant) return;
+      const mesh = new THREE.Mesh(this.plantGeometry(plant.species, plant.stage), this.plantMaterial);
+      const { x, z } = this.worldOf(this.positionOf(index));
+      mesh.position.set(x, 0, z);
+      this.root.add(mesh);
+      this.madePlants.set(index, mesh);
+      if (plant.species === 'wheat' && this.terrain[index] !== 'tilled') {
+        this.terrain[index] = 'tilled';
+        this.paintTile(index);
+      }
+    });
+  }
+
+  /** Takes the made-up plants away. The next `sync` puts the soil back as the farm has it. */
+  clearMadeUpPlants(): void {
+    for (const mesh of this.madePlants.values()) this.root.remove(mesh);
+    this.madePlants.clear();
   }
 
   /** The colour of a field cell, to check that neighbouring cells can be told apart. */
@@ -332,6 +380,7 @@ export class FarmScene {
     for (const material of this.particleMaterials.values()) material.dispose();
     this.root.clear();
     this.plantViews.clear();
+    this.madePlants.clear();
     this.particles.length = 0;
   }
 }

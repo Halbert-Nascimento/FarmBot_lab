@@ -169,6 +169,18 @@ _Avoid_: terminal, log (como nome do painel), saída
 O que o jogador faz na página: executar, pausar, continuar e reiniciar. Executar sempre recomeça a fazenda do zero, com a mesma semente.
 _Avoid_: partida, jogo salvo
 
+**Planta falsa**:
+Uma planta que só existe na cena, desenhada para comparar câmeras no modo de estresse. Não pertence à fazenda simulada: o motor nunca a vê e ela não altera o estado, o hash nem as regras.
+_Avoid_: planta de teste, mock
+
+**Modo de estresse**:
+Uma ferramenta de validação aberta pelo endereço (`?stress=1`): um campo 32×32 cheio de plantas falsas e um contador de quadros por segundo. Não faz parte do jogo.
+_Avoid_: modo de teste, benchmark
+
+**Câmera**:
+O ponto de vista da cena: isométrica (ortográfica) ou perspectiva. Só muda como a fazenda é vista, nunca a fazenda.
+_Avoid_: vista, ângulo
+
 **Cena**:
 O desenho 3D da fazenda dentro da visualização: casas, plantas e drone. Segue o estado e os eventos do motor e nunca decide nada sobre a fazenda.
 _Avoid_: mundo (reservado ao estado interno do motor), mapa

@@ -1,11 +1,15 @@
 import { COMMAND_NAMES } from '../engine';
 import type { Language } from '../engine';
+import { CameraController } from './camera-controller';
 import { createEditor } from './editor';
 import { FarmScene } from './farm-scene';
 import { codeAfterLanguageChange, describeEntry, HELP_STEPS, translate } from './i18n';
 import type { UiKey } from './i18n';
 import type { Speed } from './player';
 import { Session, SPEEDS } from './session';
+import { shouldHandleShortcut } from './shortcuts';
+import { stressPlants, summarizeFrames } from './stress';
+import type { FrameSample } from './stress';
 import { createStage } from './stage';
 
 export interface AppOptions {
@@ -16,6 +20,11 @@ export interface AppOptions {
   /** The code the editor opens with. Left out, it is the first script, in the language of the interface. */
   readonly code?: string;
   readonly speed?: Speed;
+  /** The stress field: made-up plants of both kinds and all stages, and a frame counter. A tool for judging the cameras, not part of the game. */
+  readonly stress?: boolean;
+  /** The angle and elevation of the isometric camera, in radians. By default it looks the same way as the perspective one. */
+  readonly isometricYaw?: number;
+  readonly isometricPitch?: number;
   /** Called when the player picks a language, so the choice can be remembered. */
   readonly onLanguage?: (language: Language) => void;
 }
@@ -23,9 +32,12 @@ export interface AppOptions {
 /** What the page hands to whoever tests it by hand or by script. It can press the buttons, never change the rules. */
 export interface AppHandle {
   readonly session: Session;
+  readonly cameras: CameraController;
   getCode(): string;
   setCode(code: string): void;
   language(): Language;
+  /** The stress field's frame counter, as the page shows it. */
+  frameSummary(): { fps: number; worstMs: number; frames: number };
   frameTimes(): number[];
   stats(): Record<string, number>;
 }
@@ -90,7 +102,17 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
 
   const right = element('section', 'right', workspace);
   const sceneTitle = element('h2', 'panel-title', right);
+  // In a strip of its own, above the scene: laid over the field it would hide plants, which is what is being judged.
+  const stressPanel = element('div', 'stress-panel', right);
+  const stressNote = element('div', 'stress-note', stressPanel);
+  const stressFps = element('div', 'stress-fps', stressPanel);
+  stressPanel.hidden = !options.stress;
   const sceneHost = element('div', 'scene', right);
+  const cameraBar = element('div', 'camera-bar', sceneHost);
+  const cameraButton = element('button', 'camera', cameraBar);
+  const followButton = element('button', 'follow', cameraBar);
+  const zoomLabel = element('span', 'zoom', cameraBar);
+  for (const button of [cameraButton, followButton]) button.type = 'button';
   const readout = element('div', 'readout', right);
   const meterLabel = element('span', 'meter', readout);
   const hayLabel = element('span', 'stock hay', readout);
@@ -107,8 +129,18 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
   const scene = new FarmScene(options.width, options.height);
   const session = new Session({ width: options.width, height: options.height, seed: options.seed, language, scene });
   if (options.speed !== undefined) session.speed = options.speed;
-  const stage = createStage(sceneHost, scene);
-  const run = (): void => session.run(editor.getCode());
+  const cameras = new CameraController(options.width, options.height, {
+    isometricYaw: options.isometricYaw,
+    isometricPitch: options.isometricPitch,
+  });
+  const stage = createStage(sceneHost, scene, cameras);
+  if (options.stress) scene.showMadeUpPlants(stressPlants(options.width, options.height));
+  const run = (): void => {
+    // The made-up plants are not part of the farm: running the script brings the real farm back.
+    scene.clearMadeUpPlants();
+    stressPanel.hidden = true;
+    session.run(editor.getCode());
+  };
   const editor = createEditor(editorHost, options.code ?? text('example'), run);
 
   // ---- texts that only change with the language ----
@@ -140,6 +172,10 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
     runButton.title = 'Ctrl+Enter';
     resetButton.textContent = `↺ ${text('ui.reset')}`;
     speedLabel.textContent = `${text('ui.speed')}:`;
+    cameraButton.title = text('ui.camera.hint');
+    followButton.title = text('ui.follow.hint');
+    followButton.textContent = `${text('ui.follow')} [F]`;
+    stressNote.textContent = text('stress.note');
     for (const { speed, button } of speedButtons) {
       button.textContent = speed === 'instant' ? text('ui.speed.instant') : `${speed}×`;
     }
@@ -183,11 +219,31 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
     pauseButton.textContent = status === 'paused' ? `▶ ${text('ui.resume')}` : `⏸ ${text('ui.pause')}`;
     pauseButton.disabled = status !== 'running' && status !== 'paused';
     for (const { speed, button } of speedButtons) button.setAttribute('aria-pressed', String(session.speed === speed));
+    const camera = cameras.stats();
+    cameraButton.textContent = `${text('ui.camera')}: ${text(`ui.camera.${camera.kind}`)} [C]`;
+    followButton.setAttribute('aria-pressed', String(camera.follow));
+    zoomLabel.textContent = `${text('ui.zoom')} ${camera.zoom.toFixed(1)}×`;
   }
 
   // The list of commands opens below the fold of the help: bring it into view.
   commands.addEventListener('toggle', () => {
     if (commands.open) commands.scrollIntoView({ block: 'start' });
+  });
+
+  // ---- the cameras: a button or a key, never while the player is typing ----
+  cameraButton.addEventListener('click', () => cameras.toggleKind());
+  followButton.addEventListener('click', () => cameras.toggleFollow());
+  document.addEventListener('keydown', (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const action = shouldHandleShortcut({
+      key: event.key,
+      ctrl: event.ctrlKey,
+      meta: event.metaKey,
+      alt: event.altKey,
+      inTextField: target?.closest('.cm-editor, input, textarea, select, [contenteditable]') != null,
+    });
+    if (action === 'toggle-camera') cameras.toggleKind();
+    if (action === 'toggle-follow') cameras.toggleFollow();
   });
 
   // ---- the buttons ----
@@ -212,16 +268,24 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
 
   // ---- the loop: time passes, the scene animates, the page shows it ----
   const frameTimes: number[] = [];
+  const samples: FrameSample[] = [];
   let last = performance.now();
   function frame(now: number): void {
     const elapsed = now - last;
     last = now;
     frameTimes.push(elapsed);
     if (frameTimes.length > 240) frameTimes.shift();
+    samples.push({ at: now, ms: elapsed });
+    while (samples.length > 0 && now - (samples[0] as FrameSample).at > 4000) samples.shift();
     const seconds = Math.min(0.1, elapsed / 1000);
     session.advance(seconds);
     scene.update(seconds);
+    cameras.update(seconds, scene.droneWorld());
     stage.render();
+    if (!stressPanel.hidden) {
+      const summary = summarizeFrames(samples, now);
+      stressFps.textContent = text('stress.fps', { fps: summary.fps.toFixed(1), worst: summary.worstMs.toFixed(1) });
+    }
     renderStatus();
     renderConsole();
     requestAnimationFrame(frame);
@@ -233,6 +297,8 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
 
   return {
     session,
+    cameras,
+    frameSummary: () => summarizeFrames(samples, performance.now()),
     getCode: () => editor.getCode(),
     setCode: (code) => editor.setCode(code),
     language: () => language,

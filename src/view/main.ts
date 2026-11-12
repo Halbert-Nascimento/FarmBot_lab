@@ -39,11 +39,23 @@ const requestedSpeed = Number(speedParam);
 const speed: Speed | undefined =
   speedParam === 'instant' ? 'instant' : speedParam !== null && Number.isFinite(requestedSpeed) && requestedSpeed > 0 ? requestedSpeed : undefined;
 
+/** An angle in degrees from the address, as radians, or nothing when it is missing or makes no sense. */
+function degrees(name: string): number | undefined {
+  const value = Number(params.get(name));
+  return params.has(name) && Number.isFinite(value) ? (value * Math.PI) / 180 : undefined;
+}
+
+// The stress field is a tool for judging the cameras: it is a 32x32 field and is only reached by the address.
+const stress = params.get('stress') === '1';
+
 const root = document.querySelector<HTMLDivElement>('#app');
 if (root) {
   const app = createApp(root, {
-    width: wholeNumber('w', 3),
-    height: wholeNumber('h', 2),
+    width: stress ? 32 : wholeNumber('w', 3),
+    height: stress ? 32 : wholeNumber('h', 2),
+    stress,
+    isometricYaw: degrees('isoyaw'),
+    isometricPitch: degrees('isopitch'),
     seed: wholeNumber('seed', 1),
     // The address wins, then what the player chose before, then what the browser prefers.
     language: detectLanguage(params.get('lang') ?? remembered() ?? window.navigator.language),
@@ -60,6 +72,10 @@ if (root) {
   Object.assign(window, {
     __farmbot: {
       advanceTicks: (ticks: number) => app.session.advanceTicks(ticks),
+      camera: () => app.cameras.stats(),
+      setZoom: (zoom: number) => app.cameras.setZoom(zoom),
+      setFollow: (follow: boolean) => app.cameras.setFollow(follow),
+      frameSummary: () => app.frameSummary(),
       snapshot: () => app.session.scene.snapshot(),
       stats: () => app.stats(),
       frameTimes: () => app.frameTimes(),

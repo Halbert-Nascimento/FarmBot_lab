@@ -188,9 +188,58 @@ button:disabled {
 }
 
 .scene {
+  position: relative;
   flex: 1;
   min-height: 0;
   background: #a9cfe6;
+}
+
+.camera-bar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.camera-bar button {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.camera-bar .follow[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.camera-bar .zoom {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stress-panel {
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #10161d;
+  color: #f2f6f9;
+  font-size: 12px;
+}
+
+.stress-panel[hidden] {
+  display: none;
+}
+
+.stress-fps {
+  margin-top: 2px;
+  font: 12px ui-monospace, Consolas, monospace;
+  color: #f2c14e;
 }
 
 .scene canvas {

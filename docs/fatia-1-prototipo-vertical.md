@@ -94,6 +94,17 @@ Regras da interface, decididas com o responsável:
 
 Para testar à mão, o endereço aceita `w`, `h`, `seed`, `speed`, `lang`, `demo` (`garden` ou `sweep`), `autorun` e `paused`.
 
+## Câmeras e modo de estresse (issue #13)
+
+Duas câmeras para comparar, sem escolher: a decisão é dos tickets #14 e #15. A comparação, com capturas e medidas, está em `docs/validacao-visual/comparacao-de-cameras.md`.
+
+- **Isométrica** (ortográfica) e **perspectiva**, alternadas pela tecla **C** (ou pelo botão), sem reiniciar nem avançar a simulação. As duas abrem olhando o campo pelo sul, com a mesma elevação, para mostrar o mesmo mundo com a mesma orientação (norte ao fundo, leste à direita); só a projeção e os controles diferem. `?isoyaw=45&isopitch=35.26` abre a isométrica clássica.
+- **Controles:** a roda do mouse dá zoom nas duas (de 1×, o campo inteiro, até 8×). Na perspectiva, o botão esquerdo gira e o direito move. A isométrica só dá zoom.
+- **Seguir o drone** (tecla **F**): a câmera acompanha o drone de forma suave. Com o campo inteiro na tela não tem efeito, e a câmera nunca chega perto da borda a ponto de mostrar o que está fora do campo.
+- **As teclas C e F só valem quando o foco não está no editor** nem em outro campo de texto, e não valem com Ctrl, Alt ou Cmd.
+- **Drone sobre uma planta:** fica semitransparente, para a planta aparecer; o anel azul no chão continua opaco.
+- **Modo de estresse** (`?stress=1`, só pelo endereço, nunca na interface normal): campo 32×32 com plantas falsas dos dois tipos e dos três estágios, e o contador de quadros por segundo (média e pior quadro dos últimos 4 segundos). **Essas plantas não pertencem à fazenda simulada:** são só desenho da cena, o motor nunca as vê, e o hash e as regras ficam intocados. Clicar em Executar as remove e traz a fazenda real de volta.
+
 ## Sintaxe por camada (issue #8)
 
 - **Configuração:** `FarmConfig.layer` (inteiro de 1 a 10). Sem ele, todas as camadas ficam liberadas (modo livre, REQ-ENS-41). Valor fora disso faz a criação da fazenda falhar.

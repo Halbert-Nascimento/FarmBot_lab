@@ -42,6 +42,9 @@ Identificadores e comentários do código ficam em **inglês**. Documentação, 
 | Motor de simulação | pasta `src/engine/` |
 | Visualização | pasta `src/view/` |
 | Cena | `FarmScene` |
+| Câmera | `CameraController` (`CameraKind`: `isometric`, `perspective`) |
+| Planta falsa | `MadePlant` (`showMadeUpPlants`) |
+| Modo de estresse | `stress` (`stressPlants`, `summarizeFrames`) |
 | Console | `ConsoleEntry` (uma linha) |
 | Sessão | `Session` |
 | Idioma da interface | `Language` na `Session` e no `createApp` |

@@ -63,6 +63,15 @@
   "reject.occupied": "the cell already has a plant.",
   "reject.needs-tilled-terrain": "this plant needs tilled soil. Use till() first.",
   "reject.not-enough-hay": "there is not enough hay in stock. Harvest grass to get hay.",
+  "ui.camera": "Camera",
+  "ui.camera.isometric": "Isometric",
+  "ui.camera.perspective": "Perspective",
+  "ui.camera.hint": "Switch the camera (key C). Perspective: left button turns, right button moves. Both: mouse wheel zooms.",
+  "ui.follow": "Follow the drone",
+  "ui.follow.hint": "The camera goes along with the drone (key F). Only noticeable when zoomed in.",
+  "ui.zoom": "Zoom",
+  "stress.note": "Stress mode: the plants in this field are only drawings, they are not part of the farm. Click Run to go back to the game.",
+  "stress.fps": "{fps} frames per second · worst frame {worst} ms (last 4 s)",
 
   "example": "// Your first script: the drone plants grass, waits and harvests.\nplant(Plant.GRASS);\nmove(Dir.EAST);\nplant(Plant.GRASS);\n\n// Grass takes a while to be ready.\nwait(130);\n\n// Harvest both cells. Ripe grass becomes hay.\nharvest();\nmove(Dir.WEST);\nharvest();\n\nlog(\"Hay in stock:\", getStock(Item.HAY));\n"
 }

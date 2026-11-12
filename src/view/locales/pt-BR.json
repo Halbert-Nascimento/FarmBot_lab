@@ -63,6 +63,15 @@
   "reject.occupied": "a casa já tem uma planta.",
   "reject.needs-tilled-terrain": "esta planta precisa de terra arada. Use arar() antes.",
   "reject.not-enough-hay": "falta feno no estoque. Colha capim para ter feno.",
+  "ui.camera": "Câmera",
+  "ui.camera.isometric": "Isométrica",
+  "ui.camera.perspective": "Perspectiva",
+  "ui.camera.hint": "Alternar a câmera (tecla C). Perspectiva: botão esquerdo gira, botão direito move. As duas: roda do mouse dá zoom.",
+  "ui.follow": "Seguir o drone",
+  "ui.follow.hint": "A câmera acompanha o drone (tecla F). Só se nota com zoom.",
+  "ui.zoom": "Zoom",
+  "stress.note": "Modo de estresse: as plantas deste campo são só desenho, não fazem parte da fazenda. Clique em Executar para voltar ao jogo.",
+  "stress.fps": "{fps} quadros por segundo · pior quadro {worst} ms (últimos 4 s)",
 
   "example": "// Seu primeiro script: o drone planta capim, espera e colhe.\nplantar(Planta.CAPIM);\nmover(Dir.LESTE);\nplantar(Planta.CAPIM);\n\n// O capim leva um tempo para ficar pronto.\nesperar(130);\n\n// Colhe as duas casas. Capim pronto vira feno.\ncolher();\nmover(Dir.OESTE);\ncolher();\n\nregistrar(\"Feno no estoque:\", estoque(Item.FENO));\n"
 }

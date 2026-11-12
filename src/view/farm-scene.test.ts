@@ -257,6 +257,49 @@ describe('putting the scene away', () => {
   });
 });
 
+describe('the drone over a plant', () => {
+  it('lets the plant under it show through, and is solid again once it moves away', () => {
+    const farm = createFarm({ width: 3, height: 1, seed: 1 });
+    const scene = new FarmScene(3, 1);
+    farm.run('plant(Plant.GRASS);\nwait(1);').step(7);
+    scene.handle(farm.drainEvents());
+    scene.sync(farm.getState());
+    for (let i = 0; i < 60; i++) scene.update(1 / 60);
+
+    expect(scene.stats().droneOpacity).toBeLessThan(0.6);
+    expect(scene.stats().droneOpacity).toBeGreaterThan(0.2);
+
+    farm.run('move(Dir.EAST);').step(20);
+    scene.sync(farm.getState());
+    for (let i = 0; i < 60; i++) scene.update(1 / 60);
+
+    expect(scene.stats().droneOpacity).toBeCloseTo(1, 1);
+  });
+
+  it('is solid over an empty cell, and the ring on the ground always stays solid', () => {
+    const scene = new FarmScene(3, 1);
+    scene.sync(createFarm({ width: 3, height: 1, seed: 1 }).getState());
+    for (let i = 0; i < 30; i++) scene.update(1 / 60);
+
+    expect(scene.stats().droneOpacity).toBe(1);
+    const marker = scene.root.children.find((child) => child.name === 'drone-marker') as THREE.Mesh;
+    expect((marker.material as THREE.MeshBasicMaterial).opacity).toBeGreaterThan(0.85);
+  });
+
+  it('fades over a made-up plant too, so the stress field can be judged', () => {
+    const scene = new FarmScene(3, 1);
+    scene.sync(createFarm({ width: 3, height: 1, seed: 1 }).getState());
+    scene.showMadeUpPlants([
+      { species: 'wheat', stage: 'ready' },
+      { species: 'grass', stage: 'ready' },
+      { species: 'grass', stage: 'sprout' },
+    ]);
+    for (let i = 0; i < 60; i++) scene.update(1 / 60);
+
+    expect(scene.stats().droneOpacity).toBeLessThan(0.6);
+  });
+});
+
 describe('the drone', () => {
   it('stays easy to see on a big field: it grows with the field and has a ring on the ground under it', () => {
     const small = new FarmScene(3, 2);

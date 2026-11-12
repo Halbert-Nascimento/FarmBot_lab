@@ -3,14 +3,14 @@
 //   pnpm dev            (in another terminal)
 //   node scripts/capture.mjs <milestone> <output folder> [address]
 //
-// milestone: 1 (structure), 2 (integration), 3 (scale) or 4 (the interface: editor, console, buttons). It saves screenshots and a console log in the folder.
+// milestone: 1 (structure), 2 (integration), 3 (scale) or 4 (the interface: editor, console, buttons) or 5 (the two cameras, the stress field). It saves screenshots and a console log in the folder.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
 
 const [milestone, outDir, address = 'http://localhost:5173'] = process.argv.slice(2);
 if (!milestone || !outDir) {
-  console.error('usage: node scripts/capture.mjs <1|2|3|4> <output folder> [address]');
+  console.error('usage: node scripts/capture.mjs <1|2|3|4|5> <output folder> [address]');
   process.exit(1);
 }
 mkdirSync(outDir, { recursive: true });
@@ -191,6 +191,145 @@ if (milestone === '4') {
   await page.setViewportSize({ width: 420, height: 820 });
   await open('lang=pt-BR');
   await shot('marco-4-11-janela-estreita');
+}
+
+
+if (milestone === '5') {
+  const farmbot = (name, ...args) => page.evaluate(([method, rest]) => window.__farmbot[method](...rest), [name, args]);
+  const camera = () => farmbot('camera');
+  // A click on the title puts the focus on the page itself, not in the editor, so that the keys are shortcuts.
+  const focusPage = () => page.click('.topbar h1');
+  const press = async (key) => {
+    await focusPage();
+    await page.keyboard.press(key);
+    await page.waitForTimeout(150);
+  };
+  const toIsometric = async () => {
+    if ((await camera()).kind !== 'isometric') await press('c');
+  };
+  const toPerspective = async () => {
+    if ((await camera()).kind !== 'perspective') await press('c');
+  };
+  const cameraNote = async (label) => {
+    const c = await camera();
+    note(`[camera] ${label}: ${c.kind}, zoom ${c.zoom.toFixed(2)}, segue ${c.follow}, alvo (${c.targetX.toFixed(1)}, ${c.targetZ.toFixed(1)})`);
+  };
+  const both = async (name, settleMs = 900) => {
+    for (const kind of ['perspective', 'isometric']) {
+      if (kind === 'isometric') await toIsometric();
+      else await toPerspective();
+      await shot(`marco-5-${name}-${kind === 'isometric' ? 'iso' : 'persp'}`, settleMs);
+      await cameraNote(`${name}`);
+    }
+  };
+
+  await open('lang=pt-BR&w=3&h=2&demo=garden&autorun=1&paused=1');
+  note(`[renderer] ${await renderer()}`);
+
+  // 1. Same drone, same cell, same world: the 3x2 farm with the wheat ripe and the drone standing over it.
+  await farmbot('advanceTicks', 380);
+  await both('3x2-zoom1');
+  await farmbot('setZoom', 3);
+  await farmbot('setFollow', true);
+  await both('3x2-zoom3-segue', 3200);
+
+  // 2. 16x16.
+  await open('lang=pt-BR&w=16&h=16&demo=sweep&autorun=1&paused=1');
+  await farmbot('advanceTicks', 1500);
+  await both('16x16-zoom1');
+  await farmbot('setZoom', 4);
+  await farmbot('setFollow', true);
+  await both('16x16-zoom4-segue', 3200);
+
+  // 3. 32x32 with the real sweep.
+  await open('lang=pt-BR&w=32&h=32&demo=sweep&autorun=1&paused=1');
+  await farmbot('advanceTicks', 7000);
+  await both('32x32-zoom1');
+  await farmbot('setZoom', 5);
+  await farmbot('setFollow', false);
+  await both('32x32-zoom5-sem-seguir', 1500);
+  await farmbot('setFollow', true);
+  await both('32x32-zoom5-segue', 3200);
+  const hash32 = await farmbot('hash');
+  const ticks32 = await farmbot('meter');
+
+  // 4. The stress field: made-up plants of both kinds and the three stages, and the frame counter.
+  await open('lang=pt-BR&stress=1');
+  await toPerspective();
+  await both('estresse-zoom1');
+  await farmbot('setZoom', 5);
+  await both('estresse-zoom5', 1500);
+  await farmbot('setZoom', 1);
+  const frames = {};
+  for (const kind of ['perspective', 'isometric']) {
+    if (kind === 'isometric') await toIsometric();
+    else await toPerspective();
+    await page.waitForTimeout(5500);
+    const summary = await farmbot('frameSummary');
+    const stats = await farmbot('stats');
+    frames[kind] = { fps: Number(summary.fps.toFixed(1)), pior_ms: Number(summary.worstMs.toFixed(1)), quadros: summary.frames, chamadas: stats.calls, triangulos: stats.triangles, plantas_falsas: stats.madeUpPlants };
+    note(`[fps estresse] ${kind}: ${JSON.stringify(frames[kind])}`);
+  }
+
+  // 5. Keys: C and F do nothing while the player types, and switching never touches the simulation.
+  await open('lang=pt-BR&w=3&h=2&demo=garden&autorun=1&paused=1');
+  await farmbot('advanceTicks', 100);
+  const before = { hash: await farmbot('hash'), meter: await farmbot('meter'), kind: (await camera()).kind, code: await farmbot('getCode') };
+  await page.click('.cm-content');
+  await page.keyboard.press('End');
+  await page.keyboard.type('c f C F');
+  const typed = await camera();
+  note(`[tecla no editor] camera ${typed.kind}, segue ${typed.follow} (esperado: perspective, false); texto digitado: ${(await farmbot('getCode')).includes('c f C F')}`);
+  await page.keyboard.press('Control+Z');
+  await press('c');
+  const afterC = await camera();
+  await press('f');
+  const afterF = await camera();
+  note(`[tecla fora do editor] C: ${afterC.kind}; F: segue ${afterF.follow}`);
+  note(`[trocar de camera nao mexe na simulacao] hash igual: ${before.hash === (await farmbot('hash'))}, ticks iguais: ${before.meter === (await farmbot('meter'))}, status ${await farmbot('status')}`);
+  await press('c');
+  await press('f');
+
+  // 6. Mouse: wheel zooms both cameras; drags turn and move the perspective one only.
+  const box = await page.locator('.scene canvas').boundingBox();
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await page.mouse.move(centre.x, centre.y);
+  await page.mouse.wheel(0, -600);
+  await page.waitForTimeout(200);
+  const wheelPersp = await camera();
+  await page.mouse.down();
+  await page.mouse.move(centre.x + 120, centre.y + 20, { steps: 8 });
+  await page.mouse.up();
+  const turned = await camera();
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(centre.x - 80, centre.y, { steps: 8 });
+  await page.mouse.up({ button: 'right' });
+  await page.waitForTimeout(1500);
+  const moved = await camera();
+  note(`[mouse perspectiva] roda: zoom ${wheelPersp.zoom.toFixed(2)}; botao esquerdo: angulo ${wheelPersp.yaw.toFixed(2)} -> ${turned.yaw.toFixed(2)}; botao direito: alvo ${wheelPersp.targetX.toFixed(2)} -> ${moved.targetX.toFixed(2)}`);
+  await shot('marco-5-mouse-persp-girada-e-movida', 600);
+  await press('c');
+  const isoBefore = await camera();
+  await page.mouse.move(centre.x, centre.y);
+  await page.mouse.down();
+  await page.mouse.move(centre.x + 150, centre.y + 40, { steps: 8 });
+  await page.mouse.up();
+  await page.mouse.wheel(0, -300);
+  await page.waitForTimeout(200);
+  const isoAfter = await camera();
+  note(`[mouse isometrica] arrastar nao muda o angulo (${isoBefore.yaw.toFixed(2)} -> ${isoAfter.yaw.toFixed(2)}); roda: zoom ${isoBefore.zoom.toFixed(2)} -> ${isoAfter.zoom.toFixed(2)}`);
+  note(`[simulacao intacta depois dos controles] hash igual: ${before.hash === (await farmbot('hash'))}`);
+
+  // 7. The stress field is not part of the game: the normal page has no counter, and Run brings the real farm back.
+  await open('lang=pt-BR&w=3&h=2');
+  note(`[pagina normal] painel de estresse visivel: ${await page.locator('.stress-panel').isVisible()}`);
+  await open('lang=pt-BR&stress=1');
+  const visible = await page.locator('.stress-panel').isVisible();
+  const before32 = (await farmbot('snapshot')).plants.filter(Boolean).length;
+  await page.click('button.run');
+  await page.waitForTimeout(500);
+  note(`[estresse] painel visivel: ${visible}; plantas reais antes de executar: ${before32}; plantas falsas depois: ${(await farmbot('stats')).madeUpPlants}; painel visivel depois: ${await page.locator('.stress-panel').isVisible()}`);
+  note(`[hash do 32x32 do marco 5 (varredura real, ${ticks32} ticks)] ${hash32}`);
 }
 
 writeFileSync(join(outDir, `console-marco-${milestone}.log`), `${log.join('\n')}\n`);
