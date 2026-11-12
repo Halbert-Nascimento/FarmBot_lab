@@ -1,5 +1,7 @@
 # Comparação das duas câmeras (issue #13)
 
+> **Registro histórico.** A isométrica de 35,26°, os parâmetros `?isoyaw` e `?isopitch` e o marco 6 (`pnpm capture 6`) citados abaixo foram removidos pelo ADR 0003 (`docs/adr/0003-camera-isometrica-50-como-padrao.md`), que adota a isométrica de 50° como padrão. O restante do documento e as capturas ficam como estavam.
+
 Material para a decisão do ticket #14 e para o teste do #15. **Este documento não escolhe uma câmera.** Ele reúne o que cada uma mostrou, com as capturas e as medidas, e diz o que não foi medido.
 
 ### Fontes: o que está no repositório e o que é local

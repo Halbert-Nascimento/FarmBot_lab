@@ -22,9 +22,6 @@ export interface AppOptions {
   readonly speed?: Speed;
   /** The stress field: made-up plants of both kinds and all stages, and a frame counter. A tool for judging the cameras, not part of the game. */
   readonly stress?: boolean;
-  /** The angle and elevation of the isometric camera, in radians. By default it looks the same way as the perspective one. */
-  readonly isometricYaw?: number;
-  readonly isometricPitch?: number;
   /** Called when the player picks a language, so the choice can be remembered. */
   readonly onLanguage?: (language: Language) => void;
 }
@@ -115,8 +112,9 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
   const cameraBar = element('div', 'camera-bar', sceneHost);
   const cameraButton = element('button', 'camera', cameraBar);
   const followButton = element('button', 'follow', cameraBar);
+  const restoreButton = element('button', 'restore-camera', cameraBar);
   const zoomLabel = element('span', 'zoom', cameraBar);
-  for (const button of [cameraButton, followButton]) button.type = 'button';
+  for (const button of [cameraButton, followButton, restoreButton]) button.type = 'button';
   const readout = element('div', 'readout', right);
   const meterLabel = element('span', 'meter', readout);
   const hayLabel = element('span', 'stock hay', readout);
@@ -133,10 +131,7 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
   const scene = new FarmScene(options.width, options.height);
   const session = new Session({ width: options.width, height: options.height, seed: options.seed, language, scene });
   if (options.speed !== undefined) session.speed = options.speed;
-  const cameras = new CameraController(options.width, options.height, {
-    isometricYaw: options.isometricYaw,
-    isometricPitch: options.isometricPitch,
-  });
+  const cameras = new CameraController(options.width, options.height);
   const stage = createStage(sceneHost, scene, cameras);
   if (options.stress) scene.showMadeUpPlants(stressPlants(options.width, options.height));
   /** The made-up plants are not part of the farm: anything that brings the real farm back takes them away. */
@@ -182,6 +177,8 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
     cameraButton.title = text('ui.camera.hint');
     followButton.title = text('ui.follow.hint');
     followButton.textContent = `${text('ui.follow')} [F]`;
+    restoreButton.title = text('ui.camera.reset.hint');
+    restoreButton.textContent = text('ui.camera.reset');
     stressNote.textContent = text('stress.note');
     for (const { speed, button } of speedButtons) {
       button.textContent = speed === 'instant' ? text('ui.speed.instant') : `${speed}×`;
@@ -229,6 +226,8 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
     const camera = cameras.stats();
     cameraButton.textContent = `${text('ui.camera')}: ${text(`ui.camera.${camera.kind}`)} [C]`;
     followButton.setAttribute('aria-pressed', String(camera.follow));
+    // Only the perspective camera turns, so only then is there an orientation to restore.
+    restoreButton.hidden = !cameras.canRestoreOrientation();
     zoomLabel.textContent = `${text('ui.zoom')} ${camera.zoom.toFixed(1)}×`;
   }
 
@@ -240,6 +239,7 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
   // ---- the cameras: a button or a key, never while the player is typing ----
   cameraButton.addEventListener('click', () => cameras.toggleKind());
   followButton.addEventListener('click', () => cameras.toggleFollow());
+  restoreButton.addEventListener('click', () => cameras.resetOrientation());
   const onKeyDown = (event: KeyboardEvent): void => {
     if (event.defaultPrevented) return;
     const target = event.target instanceof Element ? event.target : null;

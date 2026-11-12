@@ -212,6 +212,10 @@ button:disabled {
   font-size: 12px;
 }
 
+.camera-bar button[hidden] {
+  display: none;
+}
+
 .camera-bar .follow[aria-pressed='true'] {
   border-color: var(--accent);
   background: var(--accent);

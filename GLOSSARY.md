@@ -178,7 +178,7 @@ Uma ferramenta de validação aberta pelo endereço (`?stress=1`): um campo 32×
 _Avoid_: modo de teste, benchmark
 
 **Câmera**:
-O ponto de vista da cena: isométrica (ortográfica) ou perspectiva. Só muda como a fazenda é vista, nunca a fazenda.
+O ponto de vista da cena: isométrica de 50° (ortográfica, a padrão) ou perspectiva (a alternativa). Só muda como a fazenda é vista, nunca a fazenda.
 _Avoid_: vista, ângulo
 
 **Cena**:

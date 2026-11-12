@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 
 /**
- * The two cameras the game is trying out, and how a player moves them. It only knows about cameras and
- * a field of a given size: nothing about the farm, the engine or the page. Which camera the game keeps is
- * decided later (issues 14 and 15); this puts both on the same field so they can be compared fairly.
+ * The two cameras of the game, and how a player moves them. It only knows about cameras and a field of a given
+ * size: nothing about the farm, the engine or the page. The isometric camera is the one the game opens with
+ * (decision in ADR 0003); the perspective one is the alternative.
  *
- * Both open looking at the field from the south with the same elevation, so the same world is on screen
- * in the same way round (north at the back, east on the right): only the projection differs.
+ * Both look at the field from the south with the same elevation, so the same world is on screen in the same
+ * way round (north at the back, east on the right): only the projection differs.
  */
 export type CameraKind = 'isometric' | 'perspective';
 
@@ -31,13 +31,6 @@ export function wheelPixels(delta: number, deltaMode: number): number {
   return deltaMode === 1 ? delta * 33 : deltaMode === 2 ? delta * 400 : delta;
 }
 
-export interface CameraOptions {
-  /** The angle of the isometric camera around the field, in radians. Zero looks from the south, like the other camera. */
-  readonly isometricYaw?: number;
-  /** The elevation of the isometric camera, in radians. */
-  readonly isometricPitch?: number;
-}
-
 export interface CameraStats {
   readonly kind: CameraKind;
   readonly zoom: number;
@@ -52,13 +45,11 @@ export interface CameraStats {
 export class CameraController {
   readonly perspective = new THREE.PerspectiveCamera(FIELD_OF_VIEW, 1, 0.1, 600);
   readonly orthographic = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 600);
-  kind: CameraKind = 'perspective';
+  kind: CameraKind = 'isometric';
   private zoom = ZOOM_MIN;
   private following = false;
   private yaw = DEFAULT_YAW;
   private pitch = DEFAULT_PITCH;
-  private readonly isometricYaw: number;
-  private readonly isometricPitch: number;
   /** Where the camera has got to while following the drone (before the pan is added). */
   private readonly base = new THREE.Vector2();
   private readonly pannedBy = new THREE.Vector2();
@@ -70,12 +61,7 @@ export class CameraController {
   constructor(
     private readonly fieldWidth: number,
     private readonly fieldHeight: number,
-    options: CameraOptions = {},
   ) {
-    this.isometricYaw = options.isometricYaw ?? DEFAULT_YAW;
-    // An elevation that would look straight down, or along the ground, cannot be framed: bring it in range.
-    const asked = options.isometricPitch ?? DEFAULT_PITCH;
-    this.isometricPitch = Number.isFinite(asked) ? Math.min(PITCH_MAX, Math.max(PITCH_MIN, asked)) : DEFAULT_PITCH;
     this.refit();
     this.place();
   }
@@ -97,11 +83,11 @@ export class CameraController {
   }
 
   private currentYaw(): number {
-    return this.kind === 'perspective' ? this.yaw : this.isometricYaw;
+    return this.kind === 'perspective' ? this.yaw : DEFAULT_YAW;
   }
 
   private currentPitch(): number {
-    return this.kind === 'perspective' ? this.pitch : this.isometricPitch;
+    return this.kind === 'perspective' ? this.pitch : DEFAULT_PITCH;
   }
 
   /** Follows the size of the window. */
@@ -143,6 +129,24 @@ export class CameraController {
     if (this.kind !== 'perspective') return false;
     this.yaw -= dx * 0.006;
     this.pitch = Math.min(PITCH_MAX, Math.max(PITCH_MIN, this.pitch + dy * 0.004));
+    this.place();
+    return true;
+  }
+
+  /** Only the perspective camera can be turned, so only it has an orientation to restore. */
+  canRestoreOrientation(): boolean {
+    return this.kind === 'perspective';
+  }
+
+  /**
+   * Brings the perspective camera back to the way it opened: the turn, the elevation and the move are undone.
+   * The zoom stays as the player left it, and so does following the drone.
+   */
+  resetOrientation(): boolean {
+    if (!this.canRestoreOrientation()) return false;
+    this.yaw = DEFAULT_YAW;
+    this.pitch = DEFAULT_PITCH;
+    this.pannedBy.set(0, 0);
     this.place();
     return true;
   }
@@ -262,7 +266,7 @@ export class CameraController {
       this.orthographic.left = -half * this.aspect;
       this.orthographic.right = half * this.aspect;
       this.orthographic.updateProjectionMatrix();
-      place(this.orthographic, this.isometricYaw, this.isometricPitch, 120);
+      place(this.orthographic, DEFAULT_YAW, DEFAULT_PITCH, 120);
       if (this.fits(this.orthographic)) break;
     }
   }

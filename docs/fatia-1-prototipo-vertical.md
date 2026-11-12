@@ -96,10 +96,11 @@ Para testar à mão, o endereço aceita `w`, `h`, `seed`, `speed`, `lang`, `demo
 
 ## Câmeras e modo de estresse (issue #13)
 
-Duas câmeras para comparar, sem escolher: a decisão é dos tickets #14 e #15. A comparação, com capturas e medidas, está em `docs/validacao-visual/comparacao-de-cameras.md`.
+Duas câmeras. A decisão do ticket #14 está no ADR 0003: **a isométrica de 50° é a padrão** e a perspectiva é a alternativa. A comparação que a embasou, com capturas e medidas, está em `docs/validacao-visual/comparacao-de-cameras.md` (registro histórico).
 
-- **Isométrica** (ortográfica) e **perspectiva**, alternadas pela tecla **C** (ou pelo botão), sem reiniciar nem avançar a simulação. As duas abrem olhando o campo pelo sul, com a mesma elevação, para mostrar o mesmo mundo com a mesma orientação (norte ao fundo, leste à direita); só a projeção e os controles diferem. `?isoyaw=45&isopitch=35.26` abre a isométrica clássica.
-- **Controles:** a roda do mouse dá zoom nas duas (de 1×, o campo inteiro, até 8×). Na perspectiva, o botão esquerdo gira e o direito move. A isométrica só dá zoom.
+- **Isométrica** (ortográfica) e **perspectiva**, alternadas pela tecla **C** (ou pelo botão), sem reiniciar nem avançar a simulação. As duas abrem olhando o campo pelo sul, com a mesma elevação, para mostrar o mesmo mundo com a mesma orientação (norte ao fundo, leste à direita); só a projeção e os controles diferem.
+- **A câmera inicial é a isométrica**, com o seguir o drone desligado. O ângulo da isométrica é fixo (giro 0°, elevação 50°); a configuração de 35,26° foi removida (ADR 0003).
+- **Controles:** a roda do mouse dá zoom nas duas (de 1×, o campo inteiro, até 8×). Na perspectiva, o botão esquerdo gira e o direito move, e o botão **Restaurar câmera** (só aparece na perspectiva, sem atalho de teclado) desfaz giro, elevação e posição, mantendo o zoom. A isométrica só dá zoom.
 - **Seguir o drone** (tecla **F**): a câmera acompanha o drone de forma suave. Com o campo inteiro na tela não tem efeito, e a câmera nunca chega perto da borda a ponto de mostrar o que está fora do campo.
 - **As teclas C e F só valem quando o foco não está no editor** nem em outro campo de texto, e não valem com Ctrl, Alt ou Cmd.
 - **Drone sobre uma planta:** fica semitransparente, para a planta aparecer; o anel azul no chão continua opaco.

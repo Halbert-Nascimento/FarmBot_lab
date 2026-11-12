@@ -42,7 +42,7 @@ Identificadores e comentários do código ficam em **inglês**. Documentação, 
 | Motor de simulação | pasta `src/engine/` |
 | Visualização | pasta `src/view/` |
 | Cena | `FarmScene` |
-| Câmera | `CameraController` (`CameraKind`: `isometric`, `perspective`) |
+| Câmera | `CameraController` (`CameraKind`: `isometric`, `perspective`); restaurar câmera: `resetOrientation` |
 | Planta falsa | `MadePlant` (`showMadeUpPlants`) |
 | Modo de estresse | `stress` (`stressPlants`, `summarizeFrames`) |
 | Console | `ConsoleEntry` (uma linha) |

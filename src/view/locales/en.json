@@ -67,6 +67,8 @@
   "ui.camera.isometric": "Isometric",
   "ui.camera.perspective": "Perspective",
   "ui.camera.hint": "Switch the camera (key C). Perspective: left button turns, right button moves. Both: mouse wheel zooms.",
+  "ui.camera.reset": "Restore camera",
+  "ui.camera.reset.hint": "Puts the perspective camera back the way it opened (turn, elevation and position). The zoom stays as it is.",
   "ui.follow": "Follow the drone",
   "ui.follow.hint": "The camera goes along with the drone (key F). Only noticeable when zoomed in.",
   "ui.zoom": "Zoom",

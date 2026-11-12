@@ -69,15 +69,6 @@ describe('the two cameras show the same world, the same way round', () => {
     expect(isometric.stats().yaw).toBeCloseTo(perspective.stats().yaw, 6);
     expect(isometric.stats().pitch).toBeCloseTo(perspective.stats().pitch, 6);
   });
-
-  it('can be asked for the classic isometric angle without changing any code', () => {
-    const classic = new CameraController(8, 8, { isometricYaw: Math.PI / 4, isometricPitch: Math.atan(1 / Math.SQRT2) });
-    classic.resize(1000, 700);
-    classic.toggleKind();
-
-    expect(classic.kind).toBe('isometric');
-    expect(classic.stats().yaw).toBeCloseTo(Math.PI / 4, 6);
-  });
 });
 
 describe('switching cameras', () => {
@@ -232,20 +223,91 @@ describe('the mouse wheel in any browser', () => {
   });
 });
 
-describe('an isometric elevation that makes no sense', () => {
-  it.each([Math.PI / 2, Math.PI, -1, 0, Number.NaN, 100])('is brought to one the camera can use (%s)', (pitch) => {
-    const controller = new CameraController(8, 8, { isometricPitch: pitch });
+describe('the camera the game opens with', () => {
+  it('is the isometric one, at 50 degrees, looking from the south, and not following the drone', () => {
+    const controller = new CameraController(16, 16);
     controller.resize(1000, 700);
-    controller.toggleKind();
+    const start = controller.stats();
+
+    expect(start.kind).toBe('isometric');
+    expect(controller.camera).toBe(controller.orthographic);
+    expect(start.yaw).toBe(0);
+    expect(start.pitch).toBeCloseTo((50 * Math.PI) / 180, 6);
+    expect(start.follow).toBe(false);
+  });
+
+  it('keeps its angle however the window changes', () => {
+    const controller = ready(16, 16, 'isometric');
+    controller.resize(300, 900);
+
+    expect(controller.stats().yaw).toBe(0);
+    expect(controller.stats().pitch).toBeCloseTo((50 * Math.PI) / 180, 6);
+  });
+});
+
+describe('restoring the perspective camera', () => {
+  it('brings back the turn, the elevation and the move, and keeps the zoom the player chose', () => {
+    const controller = ready(16, 16);
+    const start = controller.stats();
+    controller.setZoom(4);
+    controller.rotate(120, 60);
+    controller.pan(-300, 100);
+    for (let i = 0; i < 120; i++) controller.update(FRAME, { x: 0, z: 0 });
+    expect(controller.stats().yaw).not.toBe(start.yaw);
+    expect(controller.stats().targetX).not.toBeCloseTo(0, 1);
+
+    expect(controller.resetOrientation()).toBe(true);
+    for (let i = 0; i < 120; i++) controller.update(FRAME, { x: 0, z: 0 });
+    const after = controller.stats();
+
+    expect(after.yaw).toBe(start.yaw);
+    expect(after.pitch).toBeCloseTo(start.pitch, 6);
+    expect(after.targetX).toBeCloseTo(0, 3);
+    expect(after.targetZ).toBeCloseTo(0, 3);
+    expect(after.zoom).toBe(4);
+    expect(after.kind).toBe('perspective');
+  });
+
+  it('does not touch following, and does not pull the camera off the drone it follows', () => {
+    const controller = ready(32, 32);
+    controller.setZoom(4);
+    controller.setFollow(true);
+    for (let i = 0; i < 240; i++) controller.update(FRAME, { x: 6, z: -4 });
+    controller.rotate(90, 20);
+    const followed = controller.stats();
+    controller.resetOrientation();
+    controller.update(FRAME, { x: 6, z: -4 });
+
+    expect(controller.stats().follow).toBe(true);
+    expect(controller.stats().targetX).toBeCloseTo(followed.targetX, 1);
+    expect(controller.stats().targetZ).toBeCloseTo(followed.targetZ, 1);
+  });
+
+  it('puts the whole field back in view at zoom 1 after a turn that had pushed it off the screen', () => {
+    const controller = ready(16, 16);
+    controller.rotate(400, 150);
+    controller.resetOrientation();
     controller.update(FRAME, { x: 0, z: 0 });
 
-    expect(controller.stats().pitch).toBeGreaterThan(0.2);
-    expect(controller.stats().pitch).toBeLessThan(Math.PI / 2);
-    for (const corner of cornersOnScreen(controller, 8, 8)) {
-      expect(Number.isFinite(corner.x) && Number.isFinite(corner.y)).toBe(true);
+    for (const corner of cornersOnScreen(controller, 16, 16)) {
       expect(Math.abs(corner.x)).toBeLessThanOrEqual(1);
       expect(Math.abs(corner.y)).toBeLessThanOrEqual(1);
     }
+  });
+
+  it('has nothing to do on the isometric camera, which never turns', () => {
+    const controller = ready(16, 16, 'isometric');
+    const before = controller.stats();
+
+    expect(controller.resetOrientation()).toBe(false);
+    expect(controller.stats()).toEqual(before);
+  });
+
+  it('is only there while the perspective camera is on', () => {
+    const controller = ready(16, 16, 'isometric');
+    expect(controller.canRestoreOrientation()).toBe(false);
+    controller.toggleKind();
+    expect(controller.canRestoreOrientation()).toBe(true);
   });
 });
 
