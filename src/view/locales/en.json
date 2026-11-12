@@ -25,7 +25,7 @@
   "item.wheat": "Wheat",
 
   "help.title": "How to play",
-  "help.step1": "The code, right below, is the commands for the drone. It follows one command per line, from top to bottom. Lines that start with // are notes for you: the drone ignores them.",
+  "help.step1": "The code below contains the drone's commands. It follows one command per line, from top to bottom. Lines that start with // are notes for you: the drone ignores them.",
   "help.step2": "Click Run. The farm starts over from scratch and the drone follows the commands.",
   "help.step3": "Watch the drone work on the farm. The console, at the foot of the page, tells what happened and warns you if there is an error. The number in brackets is the tick at which each thing happened.",
   "help.step4": "Too slow? Choose 4×, 16× or Instant: the result is the same, it only goes by faster. Pause holds the farm, and the same button lets it go on.",

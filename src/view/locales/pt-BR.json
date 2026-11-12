@@ -25,7 +25,7 @@
   "item.wheat": "Trigo",
 
   "help.title": "Como jogar",
-  "help.step1": "O código, logo abaixo, são os comandos para o drone. Ele cumpre um comando por linha, de cima para baixo. As linhas que começam com // são anotações para você: o drone as ignora.",
+  "help.step1": "O código abaixo contém os comandos do drone. Ele cumpre um comando por linha, de cima para baixo. As linhas que começam com // são anotações para você: o drone as ignora.",
   "help.step2": "Clique em Executar. A fazenda recomeça do zero e o drone segue os comandos.",
   "help.step3": "Veja o drone trabalhar na fazenda. O console, no pé da página, conta o que aconteceu e avisa se houver um erro. O número entre colchetes é o tick em que cada coisa aconteceu.",
   "help.step4": "Achou devagar? Escolha 4×, 16× ou Instantâneo: o resultado é o mesmo, só passa mais rápido. Pausar segura a fazenda, e o mesmo botão a faz continuar.",
