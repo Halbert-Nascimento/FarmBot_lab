@@ -13,7 +13,7 @@ A decisão é humana (ticket #14) e foi tomada com a comparação de `docs/valid
 1. **Isométrica 50° é a câmera padrão.** Giro 0° (olha pelo sul), elevação 50°, ortográfica, só zoom pela roda.
 2. **Perspectiva é a alternativa**, alternada com **C** (ou pelo botão), sem reiniciar nem avançar a simulação. Mantém giro (botão esquerdo), mover (botão direito) e zoom.
 3. **Seguir o drone fica desligado por padrão**, ligado e desligado com **F** (ou pelo botão).
-4. **A perspectiva ganha um botão para restaurar a orientação inicial** (a limitação registrada na comparação: girar pode deixar parte do campo fora da tela e não havia retorno rápido).
+4. **A perspectiva ganha um botão "Restaurar câmera"**, só visível nela, na faixa de controles da câmera e sem atalho de teclado. Desfaz giro, elevação e deslocamento e **preserva o zoom** atual. Responde à limitação registrada na comparação: girar pode deixar parte do campo fora da tela e não havia retorno rápido.
 5. **A isométrica de 35,26° sai do código por completo:** os parâmetros `?isoyaw` e `?isopitch` e todos os caminhos de configuração do ângulo. As capturas `marco-5-*-iso35-26.png` e a comparação histórica ficam preservadas.
 
 ## Contexto
@@ -50,16 +50,18 @@ Todas em `docs/validacao-visual/comparacao-de-cameras.md`. Os números vêm de l
 
 ## Consequências
 
-- **O jogo passa a abrir na isométrica.** Hoje abre na perspectiva (`CameraController.kind` começa em `'perspective'`). Testes e o script de captura que assumem o início na perspectiva precisam ser ajustados.
-- **Código a remover:** os parâmetros `isoyaw` e `isopitch` de `src/view/main.ts`; as opções `isometricYaw` e `isometricPitch` de `CameraController` e de `createApp`; o teste da isométrica clássica e o do limite de elevação, que só existem por causa dessas opções. O ângulo da isométrica vira constante interna (giro 0°, elevação 50°).
-- **Código a acrescentar:** o botão e o método de restaurar a orientação inicial da perspectiva (giro, elevação e deslocamento), com testes. A restauração não mexe na simulação.
-- **Script de captura:** o marco 6 (`pnpm capture 6`) só funciona com `?isoyaw`/`?isopitch` e deixa de ter como rodar. Sai do script; as capturas `iso35-26` que já existem ficam.
-- **Documentos:** `docs/fatia-1-prototipo-vertical.md` (linha sobre `?isoyaw=45&isopitch=35.26`), `GLOSSARY.md` e `docs/agents/vocabulario-codigo.md` são ajustados. A comparação histórica **não é reescrita**; ela cita parâmetros e um comando que deixam de existir, e fica como registro da época.
-- **O custo de manter duas câmeras continua:** `CameraController` guarda as duas, e a dívida de dividi-lo em uma peça por projeção segue em aberto.
+**Implementado** (commit `a3369a9`, CI verde):
 
-## Pontos em aberto para você aprovar antes de implementar
+- O jogo abre na isométrica de 50°, com o seguir o drone desligado. O ângulo é constante interna (giro 0°, elevação 50°).
+- Foram removidos `?isoyaw` e `?isopitch`, as opções `isometricYaw` e `isometricPitch` de `CameraController` e de `createApp`, e os testes que só existiam por causa delas. O marco 6 saiu do script de captura.
+- O botão "Restaurar câmera" existe só na perspectiva, na faixa de controles da câmera, sem atalho de teclado. Desfaz giro, elevação e deslocamento, mantém o zoom e o seguir o drone, e não mexe na simulação (`CameraController.resetOrientation`, com testes). Reenquadra o campo inteiro em zoom 1 depois de um giro que o tirava da tela.
+- `docs/fatia-1-prototipo-vertical.md`, `GLOSSARY.md` e `docs/agents/vocabulario-codigo.md` foram ajustados. A comparação histórica ganhou só uma nota no topo, e as capturas `iso35-26` continuam no repositório.
+- O motor não foi alterado.
 
-1. **O que o botão de restaurar desfaz:** só giro e elevação, ou também o deslocamento (mover com o botão direito) e o zoom? Proposta: giro, elevação e deslocamento; o zoom fica como está.
-2. **Onde o botão aparece:** só quando a câmera ativa é a perspectiva (a isométrica não gira), na mesma faixa de botões da câmera. E se ele ganha uma tecla; proposta: sem tecla, só botão.
-3. **A comparação histórica:** deixar intacta, ou acrescentar no topo uma linha dizendo que a isométrica 35,26° e o marco 6 foram removidos pelo ADR 0003? Proposta: acrescentar a linha, sem mexer no resto.
-4. **Aceite do ticket:** o critério pede "ambas avaliadas no modo de estresse 32×32". Isso foi feito nas capturas do #13 (`marco-5-estresse-*`). Posso citá-las como cumprimento, ou você prefere repetir a avaliação?
+**Pendências (não bloqueiam esta decisão):**
+
+- A perspectiva girada continua sem reenquadramento enquanto o jogador gira: o enquadramento é calculado só para o ângulo inicial, e o botão apenas devolve a câmera a ele.
+- O seguir o drone não foi avaliado com o drone rápido (16× e instantâneo).
+- O custo de manter duas câmeras continua: `CameraController` guarda as duas, e dividi-lo em uma peça por projeção segue em aberto.
+- Desempenho só medido por software, em um navegador; falta uma avaliação de uso por uma pessoa de fora (#15), que pode confirmar ou contestar esta decisão.
+- O script `pnpm capture 5` regrava as capturas históricas ao rodar; proteger essas evidências é uma tarefa separada.
