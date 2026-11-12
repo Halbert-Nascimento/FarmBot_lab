@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { CameraController, ZOOM_MAX, ZOOM_MIN } from './camera-controller';
+import { CameraController, wheelPixels, ZOOM_MAX, ZOOM_MIN } from './camera-controller';
 import type { CameraKind } from './camera-controller';
 
 const KINDS: CameraKind[] = ['isometric', 'perspective'];
@@ -192,6 +192,60 @@ describe('the controls of each camera', () => {
 
     expect(controller.stats().targetX).toBeCloseTo(0, 3);
     expect(controller.stats().targetZ).toBeCloseTo(0, 3);
+  });
+});
+
+describe('the pan', () => {
+  it('stores nothing while the whole field is in view, so zooming in later does not make the camera jump', () => {
+    const controller = ready(16, 16);
+    controller.pan(-300, 200);
+    controller.setZoom(4);
+    for (let i = 0; i < 240; i++) controller.update(FRAME, { x: 0, z: 0 });
+
+    expect(controller.stats().targetX).toBeCloseTo(0, 3);
+    expect(controller.stats().targetZ).toBeCloseTo(0, 3);
+  });
+
+  it('stops at the edge of what can be seen, and answers at once when dragged back', () => {
+    const controller = ready(16, 16);
+    controller.setZoom(4);
+    controller.pan(-1_000_000, 0);
+    for (let i = 0; i < 60; i++) controller.update(FRAME, { x: 0, z: 0 });
+    const edge = controller.stats().targetX;
+    controller.pan(100, 0);
+    for (let i = 0; i < 2; i++) controller.update(FRAME, { x: 0, z: 0 });
+
+    expect(edge).toBeCloseTo(8 * (1 - 1 / 4), 3);
+    expect(controller.stats().targetX).toBeLessThan(edge - 0.2);
+  });
+});
+
+describe('the mouse wheel in any browser', () => {
+  it('counts a wheel that reports lines or pages as the pixels it stands for', () => {
+    expect(wheelPixels(5, 0)).toBe(5);
+    expect(wheelPixels(3, 1)).toBeGreaterThan(60);
+    expect(wheelPixels(1, 2)).toBeGreaterThan(300);
+  });
+
+  it('refuses a number that makes no sense', () => {
+    expect(wheelPixels(Number.NaN, 0)).toBe(0);
+  });
+});
+
+describe('an isometric elevation that makes no sense', () => {
+  it.each([Math.PI / 2, Math.PI, -1, 0, Number.NaN, 100])('is brought to one the camera can use (%s)', (pitch) => {
+    const controller = new CameraController(8, 8, { isometricPitch: pitch });
+    controller.resize(1000, 700);
+    controller.toggleKind();
+    controller.update(FRAME, { x: 0, z: 0 });
+
+    expect(controller.stats().pitch).toBeGreaterThan(0.2);
+    expect(controller.stats().pitch).toBeLessThan(Math.PI / 2);
+    for (const corner of cornersOnScreen(controller, 8, 8)) {
+      expect(Number.isFinite(corner.x) && Number.isFinite(corner.y)).toBe(true);
+      expect(Math.abs(corner.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(corner.y)).toBeLessThanOrEqual(1);
+    }
   });
 });
 

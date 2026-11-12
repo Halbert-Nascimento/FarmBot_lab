@@ -8,7 +8,7 @@ import type { UiKey } from './i18n';
 import type { Speed } from './player';
 import { Session, SPEEDS } from './session';
 import { shouldHandleShortcut } from './shortcuts';
-import { stressPlants, summarizeFrames } from './stress';
+import { FRAME_WINDOW_SECONDS, stressPlants, summarizeFrames } from './stress';
 import type { FrameSample } from './stress';
 import { createStage } from './stage';
 
@@ -33,6 +33,10 @@ export interface AppOptions {
 export interface AppHandle {
   readonly session: Session;
   readonly cameras: CameraController;
+  /** Does what the Run button does. */
+  run(): void;
+  /** Takes the page down: stops the loop and lets go of what it listens to. */
+  dispose(): void;
   getCode(): string;
   setCode(code: string): void;
   language(): Language;
@@ -135,10 +139,13 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
   });
   const stage = createStage(sceneHost, scene, cameras);
   if (options.stress) scene.showMadeUpPlants(stressPlants(options.width, options.height));
-  const run = (): void => {
-    // The made-up plants are not part of the farm: running the script brings the real farm back.
+  /** The made-up plants are not part of the farm: anything that brings the real farm back takes them away. */
+  const leaveStress = (): void => {
     scene.clearMadeUpPlants();
     stressPanel.hidden = true;
+  };
+  const run = (): void => {
+    leaveStress();
     session.run(editor.getCode());
   };
   const editor = createEditor(editorHost, options.code ?? text('example'), run);
@@ -233,18 +240,22 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
   // ---- the cameras: a button or a key, never while the player is typing ----
   cameraButton.addEventListener('click', () => cameras.toggleKind());
   followButton.addEventListener('click', () => cameras.toggleFollow());
-  document.addEventListener('keydown', (event) => {
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.defaultPrevented) return;
     const target = event.target instanceof Element ? event.target : null;
     const action = shouldHandleShortcut({
       key: event.key,
       ctrl: event.ctrlKey,
       meta: event.metaKey,
       alt: event.altKey,
+      repeat: event.repeat,
+      composing: event.isComposing,
       inTextField: target?.closest('.cm-editor, input, textarea, select, [contenteditable]') != null,
     });
     if (action === 'toggle-camera') cameras.toggleKind();
     if (action === 'toggle-follow') cameras.toggleFollow();
-  });
+  };
+  document.addEventListener('keydown', onKeyDown);
 
   // ---- the buttons ----
   runButton.addEventListener('click', run);
@@ -252,7 +263,10 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
     if (session.status === 'paused') session.resume();
     else session.pause();
   });
-  resetButton.addEventListener('click', () => session.reset());
+  resetButton.addEventListener('click', () => {
+    leaveStress();
+    session.reset();
+  });
   for (const { speed, button } of speedButtons) button.addEventListener('click', () => (session.speed = speed));
   languageButton.addEventListener('click', () => {
     const previous = language;
@@ -276,7 +290,7 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
     frameTimes.push(elapsed);
     if (frameTimes.length > 240) frameTimes.shift();
     samples.push({ at: now, ms: elapsed });
-    while (samples.length > 0 && now - (samples[0] as FrameSample).at > 4000) samples.shift();
+    while (samples.length > 0 && now - (samples[0] as FrameSample).at > FRAME_WINDOW_SECONDS * 1000) samples.shift();
     const seconds = Math.min(0.1, elapsed / 1000);
     session.advance(seconds);
     scene.update(seconds);
@@ -288,16 +302,24 @@ export function createApp(root: HTMLElement, options: AppOptions): AppHandle {
     }
     renderStatus();
     renderConsole();
-    requestAnimationFrame(frame);
+    loop = requestAnimationFrame(frame);
   }
+  let loop = 0;
   renderTexts();
   renderStatus();
   renderConsole();
-  requestAnimationFrame(frame);
+  loop = requestAnimationFrame(frame);
 
   return {
     session,
     cameras,
+    run,
+    dispose() {
+      cancelAnimationFrame(loop);
+      document.removeEventListener('keydown', onKeyDown);
+      stage.dispose();
+      scene.dispose();
+    },
     frameSummary: () => summarizeFrames(samples, performance.now()),
     getCode: () => editor.getCode(),
     setCode: (code) => editor.setCode(code),

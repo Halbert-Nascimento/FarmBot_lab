@@ -276,6 +276,25 @@ describe('the drone over a plant', () => {
     expect(scene.stats().droneOpacity).toBeCloseTo(1, 1);
   });
 
+  it('goes by where the drone is while it glides, not by the cell it is heading for', () => {
+    const farm = createFarm({ width: 3, height: 1, seed: 1 });
+    const scene = new FarmScene(3, 1);
+    farm.run('plant(Plant.GRASS);\nwait(1);').step(7);
+    scene.handle(farm.drainEvents());
+    scene.sync(farm.getState());
+    for (let i = 0; i < 60; i++) scene.update(1 / 60);
+    const over = scene.stats().droneOpacity;
+
+    farm.run('move(Dir.EAST);\nmove(Dir.EAST);').step(40);
+    scene.sync(farm.getState());
+    scene.update(1 / 60);
+
+    // The drone has only just set off: it is still above the plant, so it stays see-through.
+    expect(scene.stats().droneOpacity).toBeLessThanOrEqual(over + 0.02);
+    for (let i = 0; i < 120; i++) scene.update(1 / 60);
+    expect(scene.stats().droneOpacity).toBeCloseTo(1, 1);
+  });
+
   it('is solid over an empty cell, and the ring on the ground always stays solid', () => {
     const scene = new FarmScene(3, 1);
     scene.sync(createFarm({ width: 3, height: 1, seed: 1 }).getState());

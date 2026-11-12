@@ -46,7 +46,10 @@ export class FarmScene {
   readonly height: number;
   private readonly models: PlantModels;
   private readonly tiles: THREE.InstancedMesh;
+  /** What the tiles show. It is the farm's soil, except under the made-up plants. */
   private readonly terrain: Terrain[];
+  /** The soil the farm really has, as of the last `sync`. */
+  private readonly farmTerrain: Terrain[];
   private readonly plantViews = new Map<number, PlantView>();
   private readonly plantGeometries = new Map<string, THREE.BufferGeometry>();
   private readonly plantMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
@@ -75,6 +78,7 @@ export class FarmScene {
     this.height = height;
     this.models = models;
     this.terrain = Array.from({ length: width * height }, () => 'grass');
+    this.farmTerrain = [...this.terrain];
 
     const base = new THREE.Mesh(
       new THREE.BoxGeometry(width + 0.5, 0.3, height + 0.5),
@@ -176,6 +180,7 @@ export class FarmScene {
     if (width !== this.width || height !== this.height) throw new Error('The scene and the state have different fields');
 
     cells.forEach((cell, index) => {
+      this.farmTerrain[index] = cell.terrain;
       if (this.terrain[index] !== cell.terrain) {
         this.terrain[index] = cell.terrain;
         this.paintTile(index);
@@ -268,7 +273,8 @@ export class FarmScene {
     for (const rotor of this.rotors) rotor.rotation.y += seconds * 40;
 
     // Over a plant (a real one or a made-up one) the drone turns see-through, so the plant can be seen.
-    const cell = this.indexOf(this.droneTarget);
+    // It goes by the cell the drone is over right now (it glides), not the one it is heading for.
+    const cell = this.cellUnderDrone();
     const covered = this.plantViews.has(cell) || this.madePlants.has(cell);
     this.droneOpacity += ((covered ? 0.4 : 1) - this.droneOpacity) * (1 - Math.exp(-seconds * 10));
     for (const material of this.droneMaterials) material.opacity = this.droneOpacity;
@@ -322,6 +328,12 @@ export class FarmScene {
     };
   }
 
+  private cellUnderDrone(): number {
+    const x = Math.min(this.width - 1, Math.max(0, Math.round(this.dronePosition.x + (this.width - 1) / 2)));
+    const y = Math.min(this.height - 1, Math.max(0, Math.round(this.dronePosition.z + (this.height - 1) / 2)));
+    return y * this.width + x;
+  }
+
   /** Where the drone is in the scene, as it glides: for a camera that follows it. */
   droneWorld(): { x: number; z: number } {
     return { x: this.dronePosition.x, z: this.dronePosition.z };
@@ -348,9 +360,16 @@ export class FarmScene {
     });
   }
 
-  /** Takes the made-up plants away. The next `sync` puts the soil back as the farm has it. */
+  /** Takes the made-up plants away, and puts the soil back as the farm has it. */
   clearMadeUpPlants(): void {
-    for (const mesh of this.madePlants.values()) this.root.remove(mesh);
+    for (const [index, mesh] of this.madePlants) {
+      this.root.remove(mesh);
+      const real = this.farmTerrain[index] ?? 'grass';
+      if (this.terrain[index] !== real) {
+        this.terrain[index] = real;
+        this.paintTile(index);
+      }
+    }
     this.madePlants.clear();
   }
 

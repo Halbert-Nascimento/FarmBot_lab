@@ -329,6 +329,19 @@ if (milestone === '5') {
   await page.click('button.run');
   await page.waitForTimeout(500);
   note(`[estresse] painel visivel: ${visible}; plantas reais antes de executar: ${before32}; plantas falsas depois: ${(await farmbot('stats')).madeUpPlants}; painel visivel depois: ${await page.locator('.stress-panel').isVisible()}`);
+  // Anything that brings the real farm back takes the made-up plants away: Run, Reset, or autorun in the address.
+  await open('lang=pt-BR&stress=1');
+  await page.click('button.reset');
+  note(`[estresse + Reiniciar] plantas falsas: ${(await farmbot('stats')).madeUpPlants}; painel visivel: ${await page.locator('.stress-panel').isVisible()}; solo arado na cena: ${(await farmbot('snapshot')).terrain.filter((t) => t === 'tilled').length}`);
+  await open('lang=pt-BR&stress=1&autorun=1&paused=1');
+  note(`[estresse + autorun] plantas falsas: ${(await farmbot('stats')).madeUpPlants}; painel visivel: ${await page.locator('.stress-panel').isVisible()}; status ${await farmbot('status')}`);
+  // A key held down must not flick the camera back and forth.
+  await open('lang=pt-BR&w=3&h=2');
+  await focusPage();
+  await page.keyboard.down('c');
+  for (let i = 0; i < 5; i++) await page.keyboard.down('c');
+  await page.keyboard.up('c');
+  note(`[tecla C segurada] camera: ${(await camera()).kind} (esperado: isometric, uma troca so)`);
   note(`[hash do 32x32 do marco 5 (varredura real, ${ticks32} ticks)] ${hash32}`);
 }
 

@@ -64,7 +64,8 @@ if (root) {
     onLanguage: remember,
   });
   if (params.has('autorun')) {
-    app.session.run(app.getCode());
+    // The same as the Run button, so the stress field is left behind when the real farm is brought back.
+    app.run();
     if (params.has('paused')) app.session.pause();
   }
 

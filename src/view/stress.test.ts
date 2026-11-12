@@ -5,7 +5,7 @@ import { FarmScene } from './farm-scene';
 import { shouldHandleShortcut } from './shortcuts';
 import { FRAME_WINDOW_SECONDS, stressPlants, summarizeFrames } from './stress';
 
-const plain = { ctrl: false, meta: false, alt: false, inTextField: false };
+const plain = { ctrl: false, meta: false, alt: false, inTextField: false, repeat: false, composing: false };
 
 describe('the made-up plants of the stress field', () => {
   const plants = stressPlants(32, 32);
@@ -62,6 +62,28 @@ describe('the made-up plants are not part of the farm', () => {
     for (const species of ['grass', 'wheat'] as PlantSpecies[]) {
       for (const stage of ['sprout', 'growing', 'ready'] as GrowthStage[]) expect(geometries.has(scene.shapeOf(species, stage))).toBe(true);
     }
+  });
+
+  it('put the soil back the way it was when they go away, even before the farm is looked at again', () => {
+    const scene = new FarmScene(4, 4);
+    scene.sync(createFarm({ width: 4, height: 4, seed: 1 }).getState());
+    scene.showMadeUpPlants(stressPlants(4, 4));
+    expect(scene.snapshot().terrain).toContain('tilled');
+    scene.clearMadeUpPlants();
+
+    expect(scene.snapshot().terrain.every((terrain) => terrain === 'grass')).toBe(true);
+  });
+
+  it('keep the soil of the real farm when they go away', () => {
+    const farm = createFarm({ width: 4, height: 4, seed: 1 });
+    farm.run('till();').step(100);
+    const scene = new FarmScene(4, 4);
+    scene.sync(farm.getState());
+    scene.showMadeUpPlants(stressPlants(4, 4));
+    scene.clearMadeUpPlants();
+
+    expect(scene.snapshot().terrain[0]).toBe('tilled');
+    expect(scene.snapshot().terrain.slice(1).every((terrain) => terrain === 'grass')).toBe(true);
   });
 
   it('go away when asked, and the farm shows what it really has', () => {
@@ -129,6 +151,15 @@ describe('the keyboard shortcuts', () => {
     expect(shouldHandleShortcut({ key: 'c', ...plain, ctrl: true })).toBeUndefined();
     expect(shouldHandleShortcut({ key: 'c', ...plain, meta: true })).toBeUndefined();
     expect(shouldHandleShortcut({ key: 'f', ...plain, alt: true })).toBeUndefined();
+  });
+
+  it('do nothing while a key is held down, so holding C does not flick the camera back and forth', () => {
+    expect(shouldHandleShortcut({ key: 'c', ...plain, repeat: true })).toBeUndefined();
+    expect(shouldHandleShortcut({ key: 'f', ...plain, repeat: true })).toBeUndefined();
+  });
+
+  it('do nothing while the player is composing a character with an input method', () => {
+    expect(shouldHandleShortcut({ key: 'c', ...plain, composing: true })).toBeUndefined();
   });
 
   it('ignore every other key', () => {

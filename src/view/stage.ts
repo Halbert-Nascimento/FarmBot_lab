@@ -1,10 +1,13 @@
 import * as THREE from 'three';
+import { wheelPixels } from './camera-controller';
 import type { CameraController } from './camera-controller';
 import type { FarmScene } from './farm-scene';
 
 /** Where the scene is drawn: the renderer, the lights and the mouse. It draws what it is given and decides nothing. */
 export interface Stage {
   render(): void;
+  /** Lets go of the renderer and of everything it listens to. */
+  dispose(): void;
   /** What the last frame cost the graphics card, for the performance checks. */
   stats(): { calls: number; triangles: number };
 }
@@ -34,26 +37,25 @@ export function createStage(container: HTMLElement, scene: FarmScene, cameras: C
     cameras.resize(width, height);
   }
   resize();
-  new ResizeObserver(resize).observe(container);
+  const observer = new ResizeObserver(resize);
+  observer.observe(container);
 
   const canvas = renderer.domElement;
-  canvas.addEventListener(
-    'wheel',
-    (event) => {
-      event.preventDefault();
-      cameras.zoomBy(event.deltaY);
-    },
-    { passive: false },
-  );
-  canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+  const onWheel = (event: WheelEvent): void => {
+    event.preventDefault();
+    cameras.zoomBy(wheelPixels(event.deltaY, event.deltaMode));
+  };
+  const onContextMenu = (event: Event): void => event.preventDefault();
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('contextmenu', onContextMenu);
 
   let dragging: { pointer: number; button: number; x: number; y: number } | undefined;
-  canvas.addEventListener('pointerdown', (event) => {
+  const onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.button !== 2) return;
     dragging = { pointer: event.pointerId, button: event.button, x: event.clientX, y: event.clientY };
     canvas.setPointerCapture(event.pointerId);
-  });
-  canvas.addEventListener('pointermove', (event) => {
+  };
+  const onPointerMove = (event: PointerEvent): void => {
     if (!dragging || dragging.pointer !== event.pointerId) return;
     const dx = event.clientX - dragging.x;
     const dy = event.clientY - dragging.y;
@@ -61,15 +63,28 @@ export function createStage(container: HTMLElement, scene: FarmScene, cameras: C
     dragging.y = event.clientY;
     if (dragging.button === 0) cameras.rotate(dx, dy);
     else cameras.pan(dx, dy);
-  });
+  };
   const stopDragging = (event: PointerEvent): void => {
     if (dragging?.pointer === event.pointerId) dragging = undefined;
   };
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
   canvas.addEventListener('pointerup', stopDragging);
   canvas.addEventListener('pointercancel', stopDragging);
 
   return {
     render: () => renderer.render(three, cameras.camera),
     stats: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }),
+    dispose() {
+      observer.disconnect();
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('contextmenu', onContextMenu);
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerup', stopDragging);
+      canvas.removeEventListener('pointercancel', stopDragging);
+      renderer.dispose();
+      canvas.remove();
+    },
   };
 }

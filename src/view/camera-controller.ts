@@ -25,6 +25,12 @@ const MARGIN_X = 0.9;
 const MARGIN_Y = 0.88;
 const TALLEST_PLANT = 0.9;
 
+/** A turn of the mouse wheel, in pixels: some browsers report lines or pages instead of pixels. */
+export function wheelPixels(delta: number, deltaMode: number): number {
+  if (!Number.isFinite(delta)) return 0;
+  return deltaMode === 1 ? delta * 33 : deltaMode === 2 ? delta * 400 : delta;
+}
+
 export interface CameraOptions {
   /** The angle of the isometric camera around the field, in radians. Zero looks from the south, like the other camera. */
   readonly isometricYaw?: number;
@@ -60,7 +66,6 @@ export class CameraController {
   private aspect = 1;
   private viewportHeight = 1;
   private perspectiveFit = 20;
-  private orthographicFit = 10;
 
   constructor(
     private readonly fieldWidth: number,
@@ -68,7 +73,9 @@ export class CameraController {
     options: CameraOptions = {},
   ) {
     this.isometricYaw = options.isometricYaw ?? DEFAULT_YAW;
-    this.isometricPitch = options.isometricPitch ?? DEFAULT_PITCH;
+    // An elevation that would look straight down, or along the ground, cannot be framed: bring it in range.
+    const asked = options.isometricPitch ?? DEFAULT_PITCH;
+    this.isometricPitch = Number.isFinite(asked) ? Math.min(PITCH_MAX, Math.max(PITCH_MIN, asked)) : DEFAULT_PITCH;
     this.refit();
     this.place();
   }
@@ -149,11 +156,20 @@ export class CameraController {
     const forward = new THREE.Vector2(-Math.sin(this.yaw), -Math.cos(this.yaw));
     this.pannedBy.addScaledVector(right, -dx * perPixel);
     this.pannedBy.addScaledVector(forward, (dy * perPixel) / Math.max(0.3, Math.sin(this.pitch)));
-    this.keepInsideField(this.pannedBy);
+    // Only what can be seen is worth storing: with the whole field in view nothing is kept, so zooming in
+    // later does not make the camera jump, and dragging back from the edge answers at once.
+    this.pannedBy.x = Math.min(this.reach().x, Math.max(-this.reach().x, this.pannedBy.x));
+    this.pannedBy.y = Math.min(this.reach().z, Math.max(-this.reach().z, this.pannedBy.y));
     return true;
   }
 
-  /** Keeps a point (of the pan, or of the following) inside the field, so the camera never wanders off. */
+  /** How far the camera may leave the middle of the field: the picture shows about 1/zoom of it. */
+  private reach(): { x: number; z: number } {
+    const share = 1 - 1 / this.zoom;
+    return { x: (this.fieldWidth / 2) * share, z: (this.fieldHeight / 2) * share };
+  }
+
+  /** Keeps the point the camera is following inside the field, so it never wanders off. */
   private keepInsideField(point: THREE.Vector2): void {
     point.x = Math.min(this.fieldWidth / 2, Math.max(-this.fieldWidth / 2, point.x));
     point.y = Math.min(this.fieldHeight / 2, Math.max(-this.fieldHeight / 2, point.y));
@@ -161,8 +177,9 @@ export class CameraController {
 
   /**
    * Moves time on by `seconds`. While following, the camera eases towards the drone: gently, so the
-   * picture never lurches. The camera never goes so near an edge that the picture shows beyond the field:
-   * how far it may leave the middle shrinks to nothing as the zoom comes down to 1.
+   * picture never lurches. `place` keeps the camera from going so near an edge that the picture shows beyond
+   * the field (as far as the projection allows: a perspective picture is wider near the camera): how far it may
+   * leave the middle shrinks to nothing as the zoom comes down to 1.
    */
   update(seconds: number, drone: { readonly x: number; readonly z: number }): void {
     if (this.following && Number.isFinite(seconds) && seconds > 0) {
@@ -176,9 +193,7 @@ export class CameraController {
 
   /** Puts the camera where the state says, from the angles, the zoom and the point looked at. */
   private place(): void {
-    // The picture shows about 1/zoom of the field, so the camera may leave the middle by what is left over.
-    const reachX = (this.fieldWidth / 2) * (1 - 1 / this.zoom);
-    const reachZ = (this.fieldHeight / 2) * (1 - 1 / this.zoom);
+    const { x: reachX, z: reachZ } = this.reach();
     this.target.set(
       Math.min(reachX, Math.max(-reachX, this.base.x + this.pannedBy.x)),
       0,
@@ -220,7 +235,10 @@ export class CameraController {
     });
   }
 
-  /** Finds how far each camera must be to fit the whole field at zoom 1, for the shape of the window. */
+  /**
+   * Finds how far each camera must be to fit the whole field at zoom 1, for the shape of the window. This is
+   * worked out for the angle each camera opens at: a perspective camera the player has turned is not framed again.
+   */
   private refit(): void {
     const origin = new THREE.Vector3();
     const place = (camera: THREE.Camera, yaw: number, pitch: number, distance: number) => {
@@ -245,10 +263,7 @@ export class CameraController {
       this.orthographic.right = half * this.aspect;
       this.orthographic.updateProjectionMatrix();
       place(this.orthographic, this.isometricYaw, this.isometricPitch, 120);
-      if (this.fits(this.orthographic)) {
-        this.orthographicFit = half;
-        break;
-      }
+      if (this.fits(this.orthographic)) break;
     }
   }
 
@@ -259,8 +274,4 @@ export class CameraController {
     return { x: projected.x, y: projected.y };
   }
 
-  /** How big the scene is for the isometric camera, for the checks. */
-  get isometricFit(): number {
-    return this.orthographicFit;
-  }
 }

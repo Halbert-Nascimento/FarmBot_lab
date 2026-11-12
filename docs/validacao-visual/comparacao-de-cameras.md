@@ -1,18 +1,18 @@
 # Comparação das duas câmeras (issue #13)
 
-Material para a decisão do ticket #14 e para o teste do #15. **Este documento não escolhe uma câmera.** Ele reúne o que cada uma faz, com as capturas e as medidas, e diz o que ainda não foi medido.
+Material para a decisão do ticket #14 e para o teste do #15. **Este documento não escolhe uma câmera.** Ele reúne o que cada uma mostrou, com as capturas e as medidas, e diz o que não foi medido.
 
-As capturas são `marco-5-*.png` nesta pasta (`pnpm capture 5 docs/validacao-visual`, com `pnpm dev` rodando). O log completo, com as medidas, é `console-marco-5.log`.
+As capturas são `marco-5-*.png` nesta pasta (`pnpm capture 5 docs/validacao-visual`, com `pnpm dev` rodando). O log, com todas as medidas citadas aqui, é `console-marco-5.log`. O que não vem do log nem de uma captura citada está marcado como **leitura das imagens** e pode ser contestado.
 
 ## Como a comparação foi montada
 
 - **Mesmo mundo, mesma referência:** as duas câmeras abrem olhando o campo **pelo sul, com a mesma elevação (50°)**. O norte fica ao fundo da tela e o leste à direita nas duas, e o drone aparece na mesma casa em ambas. O que muda é só a **projeção** e os **controles**.
-- **Isométrica clássica:** para ver a visão em diagonal (45° e 35,3°), abra a página com `?isoyaw=45&isopitch=35.26`. Foi deixada de fora do padrão para não mudar a referência espacial entre as câmeras. Se a isométrica for a escolhida, esse ângulo é uma decisão a tomar no #14.
-- **Controles:** perspectiva: botão esquerdo gira, botão direito move, roda dá zoom. Isométrica: só a roda (zoom). **C** alterna a câmera e **F** liga e desliga o seguir o drone, só quando o foco não está no editor.
-- **Zoom 1** mostra o campo inteiro; **zoom 5** mostra uma fatia. A câmera nunca se afasta do meio mais do que o necessário para a vista ficar dentro do campo.
-- **Seguir o drone:** a câmera acompanha o drone de forma suave (aproxima-se aos poucos, nunca salta). Com o campo inteiro na tela (zoom 1) não tem efeito, para o campo não sair da tela.
-- **Drone sobre a planta:** o drone fica semitransparente quando está sobre uma planta, e o anel azul no chão continua opaco.
-- **Modo de estresse (`?stress=1`):** campo 32×32 com plantas falsas, **só desenhadas pela cena**: capim e trigo em xadrez, e os três estágios em fileiras. Elas **não fazem parte da fazenda**: o motor nunca as vê, e executar um script as remove. O contador de quadros por segundo aparece só nesse modo, com a média e o pior quadro dos últimos 4 segundos.
+- **Ângulo da isométrica:** para ver a diagonal clássica (45° e 35,3°), abra a página com `?isoyaw=45&isopitch=35.26`. Ela não foi o padrão para não mudar a referência espacial entre as câmeras, e não tem captura. O ângulo da isométrica é uma decisão do #14 se ela for mantida.
+- **Controles:** perspectiva: botão esquerdo gira, botão direito move, roda dá zoom. Isométrica: só a roda (zoom). **C** alterna a câmera e **F** liga e desliga o seguir o drone, só quando o foco não está no editor, e não com a tecla segurada.
+- **Zoom 1** mostra o campo inteiro; **zoom 5** mostra cerca de um quinto da largura. A câmera nunca vai tão perto da borda que a imagem mostre o que está fora do campo, até onde a projeção permite (na perspectiva, a parte próxima da imagem é mais larga e ainda deixa ver uma nesga de céu: `marco-5-32x32-zoom5-segue-persp.png`).
+- **Seguir o drone:** a câmera aproxima-se do drone aos poucos, sem saltar. Com o campo inteiro na tela (zoom 1) não tem efeito.
+- **Drone sobre a planta:** fica semitransparente enquanto está sobre uma planta, e o anel azul no chão continua opaco.
+- **Modo de estresse (`?stress=1`):** campo 32×32 com plantas falsas, **só desenhadas pela cena**: capim e trigo em xadrez, e os três estágios em fileiras. Elas **não fazem parte da fazenda simulada**: o motor nunca as vê, e Executar, Reiniciar ou `autorun` as removem. O contador de quadros por segundo aparece só nesse modo, com a média e o pior quadro dos últimos 4 segundos.
 
 ## Evidências lado a lado
 
@@ -27,64 +27,48 @@ As capturas são `marco-5-*.png` nesta pasta (`pnpm capture 5 docs/validacao-vis
 | 3×2 em zoom 3: drone sobre o trigo | `marco-5-3x2-zoom3-segue-persp.png` | `marco-5-3x2-zoom3-segue-iso.png` |
 | Estresse 32×32 inteiro (2 espécies × 3 estágios) | `marco-5-estresse-zoom1-persp.png` | `marco-5-estresse-zoom1-iso.png` |
 | Estresse em zoom 5 | `marco-5-estresse-zoom5-persp.png` | `marco-5-estresse-zoom5-iso.png` |
-
-## O que cada câmera mostrou
-
-Observações das capturas e do log. Onde há medida, ela vem do log; o resto é leitura das imagens e pode ser contestado.
-
-### Perspectiva
-
-**Vantagens observadas**
-- Dá noção de profundidade: o campo parece um chão, as plantas em primeiro plano são maiores e se distinguem melhor (no 32×32 em zoom 5, grama e trigo e os três estágios se reconhecem bem).
-- Gira e se desloca, então dá para olhar a casa do drone por outro lado, e o drone que encobre a planta pode ser contornado.
-- A visão próxima do trigo e do capim ficou a mais "natural" nas capturas de 3×2 e 32×32 em zoom.
-
-**Limitações observadas**
-- Com o campo 32×32 inteiro, as plantas do fundo ficam bem menores que as da frente: as fileiras mais distantes são as mais difíceis de ler.
-- A escala varia pela tela, então comparar duas casas distantes "a olho" é menos confiável.
-- Mais controles para aprender (girar, mover, zoom), e girar muda a referência de orientação (norte deixa de ficar ao fundo).
-
-### Isométrica (ortográfica)
-
-**Vantagens observadas**
-- A escala é a mesma em toda a tela: cada casa tem o mesmo tamanho, no fundo e na frente. No 32×32 inteiro as plantas das fileiras de trás se leem tão bem quanto as da frente.
-- A orientação fica fixa e simples: só a roda de zoom, nada a aprender.
-- Quadriculado regular, bom para contar casas e para ver o padrão do campo.
-
-**Limitações observadas**
-- Sem perspectiva a imagem é mais "achatada": o campo inteiro ocupa uma área menor da tela do que na perspectiva (nas capturas de 32×32 inteiro, cerca de 470 px de largura contra 550 px).
-- Sem girar nem mover, não se contorna uma planta escondida (só o seguir o drone e o zoom ajudam).
-- A isométrica de 45° (clássica) muda a referência do norte e não foi o padrão desta comparação.
+| Perspectiva girada e movida com o mouse | `marco-5-mouse-persp-girada-e-movida.png` | (a isométrica não gira nem move) |
 
 ## Medidas do modo de estresse
 
-Renderização **por software** (SwiftShader), sem placa de vídeo, no Edge sem interface. Os números são pessimistas em relação a um computador com GPU.
+Renderização **por software** (SwiftShader), sem placa de vídeo, no Edge sem interface, com o campo inteiro na tela (zoom 1). Os números são pessimistas em relação a um computador com GPU. Fonte: `console-marco-5.log`, linhas `[fps estresse]`.
 
 | Câmera | Quadros por segundo (média de 4 s) | Pior quadro | Chamadas de desenho | Triângulos |
 | --- | --- | --- | --- | --- |
-| Perspectiva | 21,6 | 66,7 ms | 1037 | 219.532 |
-| Isométrica | 20,2 | 66,7 ms | 1037 | 219.532 |
+| Perspectiva | 20,9 | 66,7 ms | 1037 | 219.532 |
+| Isométrica | 20,1 | 59,9 ms | 1037 | 219.532 |
 
-A diferença de desempenho entre as câmeras é pequena, e as duas rodam no limite do que o desenho por software aguenta: o custo está no desenho das 1024 plantas (cerca de 220 mil triângulos), igual nas duas. Com zoom 5 o desempenho sobe (cerca de 33 quadros por segundo na perspectiva numa execução anterior), porque muitas plantas saem da tela. Um campo com todas as 1024 casas plantadas em estágio pronto tem o dobro de triângulos do varredor real de 32×32, que a 16× rodou a cerca de 50 quadros por segundo.
+As duas câmeras desenham as mesmas 1024 plantas, com as mesmas chamadas e triângulos, e ficaram com valores próximos. Como a medida foi uma só por câmera, a diferença de cerca de 0,8 quadro por segundo **não deve ser lida como diferença de desempenho**. Para comparar com o jogo real em 32×32 (varredor com cerca de 951 plantas), veja `console-marco-3.log`, linha `[quadros a 16x]`: o estresse tem o dobro de triângulos, porque todas as casas estão plantadas.
 
-## Respostas às perguntas do responsável
+## Observações por aspecto
 
-- **Legibilidade das plantas nos três estágios:** nas duas câmeras os três estágios se distinguem em zoom 5 e na visão próxima. Com o 32×32 inteiro, nenhuma das duas deixa ver o formato de cada planta; a isométrica mantém todas do mesmo tamanho, e a perspectiva deixa as do fundo bem menores.
-- **Visibilidade do drone e da casa ocupada:** o anel azul marca a casa nas duas câmeras e o drone semitransparente deixa a planta aparecer. Com o campo inteiro no 32×32 o drone é pequeno nas duas; o anel é o que ajuda a achá-lo.
-- **Orientação do campo:** nas duas, norte ao fundo e leste à direita. Na perspectiva, depois de girar, a orientação muda, e não há botão para voltar ao padrão ainda.
-- **Quanto do campo cabe:** o zoom 1 mostra o campo todo nas duas; a isométrica o mostra menor na tela. Em zoom 5 aparece cerca de um quinto da largura do campo.
-- **Seguir o drone:** ajuda a ver o que o drone faz de perto sem mexer na câmera, e não atrapalha no zoom 1. Perto da borda a câmera para antes de mostrar o que está fora do campo (na isométrica a borda fica no limite da imagem; na perspectiva, por causa da perspectiva, ainda sobra uma nesga de céu). Em zoom alto o acompanhamento é suave; o que não foi avaliado é como ele se comporta com o drone se movendo rápido em 16× ou instantâneo.
+Cada linha diz o que se viu, sem somar pontos. A coluna de fonte diz onde olhar.
+
+| Aspecto | Perspectiva | Isométrica | Fonte |
+| --- | --- | --- | --- |
+| Legibilidade das plantas, campo 32×32 inteiro | As plantas das fileiras da frente são maiores que as do fundo. As do fundo ficam pequenas | Todas as plantas têm o mesmo tamanho, na frente e no fundo | leitura das imagens: `32x32-zoom1` |
+| Legibilidade dos três estágios em zoom 5 | Capim e trigo e os três estágios se reconhecem | Também se reconhecem | leitura das imagens: `estresse-zoom5` |
+| Largura do campo 32×32 inteiro na tela | cerca de 550 px na borda de baixo | cerca de 470 px, igual em toda a altura | medido nas capturas `32x32-zoom1` |
+| Visibilidade do drone e da casa com o campo inteiro | O drone fica pequeno nas duas câmeras; o anel azul é o que o localiza | o mesmo | leitura das imagens: `32x32-zoom1` |
+| Drone sobre a planta (3×2, zoom 3) | O drone translúcido deixa ver o trigo; dá para olhar por outro ângulo girando | O drone translúcido deixa ver o trigo; o ângulo é fixo | leitura das imagens: `3x2-zoom3-segue` |
+| Orientação | Norte ao fundo e leste à direita; depois de girar, a orientação muda | Fixa: norte ao fundo e leste à direita | `[camera]` e `[mouse]` no log |
+| O que se controla | Zoom, girar e mover | Zoom | `[mouse perspectiva]` e `[mouse isometrica]` no log |
+| Seguir o drone, zoom 5 | O alvo parou em (12,8; −3,5), no limite de 16×(1−1/5); sobra uma nesga de céu à direita | O alvo é o mesmo; a borda do campo fica no limite da imagem | `[camera]` no log e `32x32-zoom5-segue` |
 
 ## O que não foi medido
 
 - Desempenho com placa de vídeo real, e em outros navegadores.
-- O estresse em movimento (o drone andando pelo campo cheio): o estresse é uma foto parada com plantas falsas; o desempenho com o varredor real em 32×32 está no marco 3.
+- O estresse **em movimento**: o estresse é um campo parado com plantas falsas. O desempenho com o varredor real em 32×32 está no marco 3.
+- Se seguir o drone ajuda ou atrapalha **quando ele se move rápido** (16× e instantâneo): as capturas de seguir foram feitas com a simulação pausada.
+- Girar a perspectiva pode deixar parte do campo fora da tela: o enquadramento é calculado só para o ângulo inicial. Não há botão para voltar à orientação inicial, e não há captura disso.
 - Uma pessoa de fora usando cada câmera: é o teste do #15.
-- A isométrica clássica de 45°: só disponível pelo endereço, sem captura.
+- A isométrica clássica de 45°: só disponível pelo endereço.
+- Em campo pequeno (3×2), o zoom máximo deixa as plantas enormes e mostra menos de uma casa (`3x2-zoom3-segue`).
 
 ## Decisões que ficam para o #14
 
 1. Qual câmera é a padrão, e se a outra continua como opção ou sai.
 2. O ângulo da isométrica (a mesma referência da perspectiva, ou o 45° clássico).
 3. Se a perspectiva precisa de um botão para voltar à orientação inicial.
-4. Se o seguir o drone deve começar ligado.
+4. Se o seguir o drone deve começar ligado, e como se comporta com o drone rápido.
+5. O limite de zoom em campos pequenos.
